@@ -3,10 +3,6 @@ Config = {}
 
 Config.DevMode = false
 Config.Debug   = false
-Config.SpooniEmerald = false -- If you are using spooni's emerald map and have door conflicts set this to true
-Config.SpooniManzanitaPost = true -- If you are using spooni's manzanita post map and have door conflicts set this to true
-Config.SpooniPronghornRanch = true -- If you are using spooni's pronghorn ranch map and have door conflicts set this to true
-
 
 Config.Checkpoints = { rotate = false, size = 0.85, height = 0.14, rgba = {0, 255, 0, 50},}
 
