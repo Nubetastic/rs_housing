@@ -357,39 +357,34 @@ CreateThread(function()
     end
 
     while true do
-        local sleep     = 1000
+        local sleep = 1000
         local pedCoords = GetEntityCoords(PlayerPedId())
 
         for i, loc in ipairs(Config.Locations) do
 
             local p = shopPrompts[i]
 
-            -- seguridad por si cambia config o no existe
             if p and p.prompt then
 
                 local dist = #(pedCoords - loc.coords)
 
-                if dist < Config.PromptRadius * 4 then
+                if dist < Config.PromptRadius then
                     sleep = 0
 
-                    local inRange = dist < Config.PromptRadius
+                    PromptSetVisible(p.prompt, 1)
+                    PromptSetEnabled(p.prompt, 1)
 
-                    PromptSetVisible(p.prompt, inRange and 1 or 0)
-                    PromptSetEnabled(p.prompt, inRange and 1 or 0)
+                    local label = CreateVarString(10, 'LITERAL_STRING', loc.label)
+                    PromptSetActiveGroupThisFrame(p.groupHash, label)
 
-                    if inRange then
-                        local label = CreateVarString(10, 'LITERAL_STRING', loc.label)
-                        PromptSetActiveGroupThisFrame(p.groupHash, label)
+                    if not menuOpen and Citizen.InvokeNative(0xC92AC953F0A982AE, p.prompt) then
 
-                        if not menuOpen and Citizen.InvokeNative(0xC92AC953F0A982AE, p.prompt) then
-
-                            if loc.camera then
-                                activeCamData = loc.camera
-                                CreateShopCamera(loc.camera)
-                            end
-
-                            OpenMainMenu()
+                        if loc.camera then
+                            activeCamData = loc.camera
+                            CreateShopCamera(loc.camera)
                         end
+
+                        OpenMainMenu()
                     end
 
                 else
