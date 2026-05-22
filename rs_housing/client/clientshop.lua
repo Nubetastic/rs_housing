@@ -101,6 +101,11 @@ local function DeletePreviewObject()
     end
 end
 
+local PropOffsetByHash = {}
+for modelName, offset in pairs(Config.PropOffset) do
+    PropOffsetByHash[GetHashKey(modelName)] = offset
+end
+
 local function SpawnPreviewObject(hash)
     previewRunning = false
     loadingHash    = hash
@@ -123,6 +128,11 @@ local function SpawnPreviewObject(hash)
         if not HasModelLoaded(hash) then return end
 
         local pos = GetCoordsInFrontOfCam(Config.PreviewDistance)
+
+        if PropOffsetByHash[hash] then
+            pos = vec3(pos.x, pos.y, pos.z + PropOffsetByHash[hash])
+        end
+
         local obj = CreateObjectNoOffset(hash, pos.x, pos.y, pos.z, false, false, false)
         if not DoesEntityExist(obj) then return end
 
@@ -142,6 +152,11 @@ local function SpawnPreviewObject(hash)
         while previewRunning do
             if DoesEntityExist(previewObject) then
                 local p = GetCoordsInFrontOfCam(Config.PreviewDistance)
+
+                if PropOffsetByHash[hash] then
+                    p = vec3(p.x, p.y, p.z + PropOffsetByHash[hash])
+                end
+
                 SetEntityCoordsNoOffset(previewObject, p.x, p.y, p.z, false, false, false)
                 SetEntityRotation(previewObject, 0.0, 0.0, angle, 2, false)
                 angle = (angle + Config.RotationSpeed) % 360.0
