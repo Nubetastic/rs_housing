@@ -101,6 +101,7 @@ local function DeletePreviewObject()
     end
 end
 
+
 local PropOffsetByHash = {}
 for modelName, offset in pairs(Config.PropOffset) do
     PropOffsetByHash[GetHashKey(modelName)] = offset
@@ -234,7 +235,7 @@ local function OpenBuyMenu(itemName, itemData, categoryName)
 
             if amount and amount > 0 then
                 TriggerServerEvent(
-                    'rsg-furniture-shop:server:buyFurniture',
+                    'rs_housing:server:buyFurniture',
                     itemName,
                     itemData.item,
                     itemData.cost,
@@ -398,15 +399,24 @@ CreateThread(function()
     end
 end)
 
-RegisterNetEvent('rsg-furniture-shop:client:buyResult', function(success, itemName, cost, amount)
+RegisterNetEvent('rs_housing:client:buyResult', function(success, reason, itemName, cost, amount)
     if success then
         exports.rs_housing:ShowAdvancedNotification(
             Locales['FURNI_NOTI'],
-            Locales["YOU_BOUGTH"] .. " " .. amount .. "x " .. itemName .. " " .. Locales['FOR'] .. " " .. cost .. "$",
+            Locales['YOU_BOUGTH'] .. " " .. amount .. "x " .. itemName .. " " .. Locales['FOR'] .. " " .. cost .. "$",
             "generic_textures",
             "tick",
             3000,
             "COLOR_GREEN"
+        )
+    elseif reason == 'weight' then
+        exports.rs_housing:ShowAdvancedNotification(
+            Locales['FURNI_NOTI'],
+            Locales['FURNITURE_NOT_ENOUGH_WEIGHT'],
+            "menu_textures",
+            "cross",
+            3000,
+            "COLOR_RED"
         )
     else
         exports.rs_housing:ShowAdvancedNotification(
