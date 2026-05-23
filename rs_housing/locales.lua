@@ -174,4 +174,5 @@ Locales = {
     ["FURNI_SHOP"]                                 = "Furniture Shop",
     ["FURNI_AMOUNT_DESC"]                          = "Select the quantity you want to buy,",
     ["FURNITURE_TOO_FAR"]                          = "You are out of property range",
+    ['FURNITURE_NOT_ENOUGH_WEIGHT']                = 'You are carrying too much weight!',
 }
