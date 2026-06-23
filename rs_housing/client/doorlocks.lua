@@ -28,8 +28,8 @@ local IsAuthorized = function(doorID, owned)
   return false
 end
 
-local function CreateDoorPrompt(doorIndex, locationId)
-  if ActivePrompts[doorIndex] then return end
+local function CreateDoorPrompt(promptKey, locationId)
+  if ActivePrompts[promptKey] then return end
 
   local groupId = GetRandomIntInRange(0, 0xffffff)
 
@@ -42,17 +42,17 @@ local function CreateDoorPrompt(doorIndex, locationId)
   Citizen.InvokeNative(0xC5F428EE08FA7F2C, prompt, true)
   PromptRegisterEnd(prompt)
 
-  ActivePrompts[doorIndex] = {
+  ActivePrompts[promptKey] = {
     promptHandle = prompt,
     groupId      = groupId,
     locationId   = locationId,
   }
 end
 
-local function RemoveDoorPrompt(doorIndex)
-  if not ActivePrompts[doorIndex] then return end
-  PromptDelete(ActivePrompts[doorIndex].promptHandle)
-  ActivePrompts[doorIndex] = nil
+local function RemoveDoorPrompt(promptKey)
+  if not ActivePrompts[promptKey] then return end
+  PromptDelete(ActivePrompts[promptKey].promptHandle)
+  ActivePrompts[promptKey] = nil
 end
 
 function GetDoorData()
@@ -78,9 +78,19 @@ AddEventHandler("rs_housing:client:loadDoorsList", function(data)
   DoorData.Loaded    = true
 end)
 
-RegisterNetEvent("rs_housing:client:setState")
-AddEventHandler("rs_housing:client:setState", function(doorId, state)
-  DoorData.DoorsList[doorId].locked = state
+RegisterNetEvent("rs_housing:client:setDoorState")
+AddEventHandler("rs_housing:client:setDoorState", function(doorId, doorIndex, state)
+  if not DoorData.DoorsList[doorId] then return end
+
+  if doorIndex then
+    if DoorData.DoorsList[doorId].doors[doorIndex] then
+      DoorData.DoorsList[doorId].doors[doorIndex].locked = state
+    end
+  else
+    for i, _ in ipairs(DoorData.DoorsList[doorId].doors) do
+      DoorData.DoorsList[doorId].doors[i].locked = state
+    end
+  end
 end)
 
 RegisterNetEvent("rs_housing:client:registerNewDoorlock")
@@ -93,9 +103,8 @@ AddEventHandler('rs_housing:client:registerNewDoorlock', function(doorID, doors,
 
   DoorData.DoorsList[doorID].authorizedJobs = { 'none' }
   DoorData.DoorsList[doorID].doors          = doors
-  DoorData.DoorsList[doorID].locked         = true
 
-  DoorData.DoorsList[doorID].distance       = 1.8
+  DoorData.DoorsList[doorID].distance       = 1.5
 
   DoorData.DoorsList[doorID].canBreakIn     = canBreakIn
 
@@ -169,7 +178,7 @@ Citizen.CreateThread(function()
                   local doorcoords = vector3(v[4], v[5], v[6])
                   local distance   = #(doorcoords - door.objCoords)
 
-                  if distance <= 1.8 then
+                  if distance <= 1.5 then
                     door.object = v[1]
                   end
                 end
@@ -197,16 +206,17 @@ Citizen.CreateThread(function()
 
       for k, v in ipairs(DoorData.DoorsList) do
 
-        for _, door in ipairs(v.doors) do
+        for doorIdx, door in ipairs(v.doors) do
 
           if door ~= false and door.object then
 
             local distance    = #(coords - door.objCoords)
-            local maxDistance = 1.8
+            local maxDistance = 1.5
+            local promptKey   = k .. "_" .. doorIdx
 
             if distance < Config.RenderDoorStateDistance then
 
-              if v.locked then
+              if door.locked then
 
                 if DoorSystemGetOpenRatio(door.object) ~= 0.0 then
                   DoorSystemSetOpenRatio(door.object, 0.0, true)
@@ -239,29 +249,33 @@ Citizen.CreateThread(function()
 
               if IsAuthorized(k, v.owned) then
 
-                CreateDoorPrompt(k, v.locationId)
+                CreateDoorPrompt(promptKey, v.locationId)
 
-                local promptData = ActivePrompts[k]
+                local promptData = ActivePrompts[promptKey]
 
                 if promptData then
+
+                  local promptText = door.locked and Locales["DOORUNLOCK"] or Locales["DOORLOCK"]
+                  local str        = CreateVarString(10, 'LITERAL_STRING', promptText)
+                  PromptSetText(promptData.promptHandle, str)
 
                   local label = CreateVarString(10, 'LITERAL_STRING', Locales["HOUSE"] .. " (" .. v.locationId .. ")")
                   PromptSetActiveGroupThisFrame(promptData.groupId, label)
 
                   if Citizen.InvokeNative(0xC92AC953F0A982AE, promptData.promptHandle) then
-                    local entity = Citizen.InvokeNative(0xF7424890E4A094C0, v.doors[1].object, 0)
+                    local entity = Citizen.InvokeNative(0xF7424890E4A094C0, door.object, 0)
                     PerformKeyAnimation(entity)
-                    TriggerServerEvent('rs_housing:server:updateState', k, (not v.locked))
+                    TriggerServerEvent('rs_housing:server:updateState', k, doorIdx, (not door.locked))
                     Wait(500)
                   end
                 end
 
               else
-                RemoveDoorPrompt(k)
+                RemoveDoorPrompt(promptKey)
               end
 
             else
-              RemoveDoorPrompt(k)
+              RemoveDoorPrompt(promptKey)
             end
           end
         end
