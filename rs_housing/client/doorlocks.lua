@@ -104,7 +104,7 @@ AddEventHandler('rs_housing:client:registerNewDoorlock', function(doorID, doors,
   DoorData.DoorsList[doorID].authorizedJobs = { 'none' }
   DoorData.DoorsList[doorID].doors          = doors
 
-  DoorData.DoorsList[doorID].distance       = 1.8
+  DoorData.DoorsList[doorID].distance       = 1.5
 
   DoorData.DoorsList[doorID].canBreakIn     = canBreakIn
 
@@ -178,7 +178,7 @@ Citizen.CreateThread(function()
                   local doorcoords = vector3(v[4], v[5], v[6])
                   local distance   = #(doorcoords - door.objCoords)
 
-                  if distance <= 1.8 then
+                  if distance <= 1.5 then
                     door.object = v[1]
                   end
                 end
@@ -211,7 +211,7 @@ Citizen.CreateThread(function()
           if door ~= false and door.object then
 
             local distance    = #(coords - door.objCoords)
-            local maxDistance = 1.8
+            local maxDistance = 1.5
             local promptKey   = k .. "_" .. doorIdx
 
             if distance < Config.RenderDoorStateDistance then
