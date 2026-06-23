@@ -37,8 +37,13 @@ AddEventHandler("rs_housing:server:registerNewDoorlock", function(locationId, do
 
   DoorsList[doorId].index      = doorId
 
-  DoorsList[doorId].doors      = doors
-  DoorsList[doorId].locked     = true
+  DoorsList[doorId].doors      = {}
+  for i, door in ipairs(doors) do
+    DoorsList[doorId].doors[i] = door
+    if door ~= false then
+      DoorsList[doorId].doors[i].locked = true
+    end
+  end
 
   DoorsList[doorId].distance   = 1.8
 
@@ -52,7 +57,7 @@ AddEventHandler("rs_housing:server:registerNewDoorlock", function(locationId, do
   DoorsList[doorId].owned      = isPropertyOwned
   DoorsList[doorId].citizenid  = citizenid
 
-  TriggerClientEvent("rs_housing:client:registerNewDoorlock", -1, doorId, doors, canBreakIn, keyholders, isPropertyOwned, citizenid, locationId)
+  TriggerClientEvent("rs_housing:client:registerNewDoorlock", -1, doorId, DoorsList[doorId].doors, canBreakIn, keyholders, isPropertyOwned, citizenid, locationId)
 
 end)
 
@@ -75,8 +80,14 @@ AddEventHandler("rs_housing:server:updateDoorlockInformation", function(location
         DoorsList[_].keyholders = {}
         DoorsList[_].owned      = 0
 
+        for i, d in ipairs(DoorsList[_].doors) do
+          if d ~= false then
+            DoorsList[_].doors[i].locked = true
+          end
+        end
+
         if tonumber(data[1]) then
-          TriggerClientEvent('rs_housing:client:setState', -1, _, false)
+          TriggerClientEvent('rs_housing:client:setDoorState', -1, _, nil, true)
         end
 
       elseif actionType == 'REGISTER_KEYHOLDER' then
@@ -100,11 +111,15 @@ end)
 
 
 RegisterServerEvent('rs_housing:server:updateState')
-AddEventHandler('rs_housing:server:updateState', function(doorID, state)
+AddEventHandler('rs_housing:server:updateState', function(doorID, doorIndex, state)
 
   if type(doorID) ~= 'number' then
     return
   end
 
-  TriggerClientEvent('rs_housing:client:setState', -1, doorID, state)
+  if DoorsList[doorID] and DoorsList[doorID].doors[doorIndex] and DoorsList[doorID].doors[doorIndex] ~= false then
+    DoorsList[doorID].doors[doorIndex].locked = state
+  end
+
+  TriggerClientEvent('rs_housing:client:setDoorState', -1, doorID, doorIndex, state)
 end)
