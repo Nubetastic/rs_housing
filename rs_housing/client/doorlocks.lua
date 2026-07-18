@@ -88,7 +88,9 @@ AddEventHandler("rs_housing:client:setDoorState", function(doorId, doorIndex, st
     end
   else
     for i, _ in ipairs(DoorData.DoorsList[doorId].doors) do
-      DoorData.DoorsList[doorId].doors[i].locked = state
+      if DoorData.DoorsList[doorId].doors[i] ~= false then
+        DoorData.DoorsList[doorId].doors[i].locked = state
+      end
     end
   end
 end)
