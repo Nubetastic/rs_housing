@@ -88,7 +88,8 @@ Config.PropertyBlips = {
 Config.TaxRepoSystem = {
     -- Enables or disables the system
     Enabled = true,
-    DefaultBank = 'bank', -- Bank name shows to user
+    DefaultBank = 'bank', -- cash type
+    DefaultBankName = 'bank', -- Bank name shows to user
     -- MONTHLY REPO
     Monthly = true,          -- true = activate monthly repo
     Day     = 28,             -- day of the month

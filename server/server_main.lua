@@ -124,6 +124,11 @@ local function GetLedgerRefundBankType()
     return (Config.TaxRepoSystem and Config.TaxRepoSystem.DefaultBank) or 'bank'
 end
 
+local function GetLedgerRefundBankName()
+    return (Config.TaxRepoSystem and Config.TaxRepoSystem.DefaultBankName)
+        or GetLedgerRefundBankType()
+end
+
 local function TransferLedgerFundsToBank(citizenid, amount, reason)
     amount = tonumber(amount) or 0
     if amount <= 0 then return true end
@@ -488,6 +493,7 @@ RegisterNetEvent('rs_housing:server:requestSellInformation', function(propertyId
         ledger = tonumber(property.ledgerhome) or 0,
         taxLedger = tonumber(property.ledger) or 0,
         refundAccount = GetLedgerRefundBankType(),
+        refundAccountName = GetLedgerRefundBankName(),
         inventoryHasItems = PropertyInventoryHasItems(propertyId)
     })
 end)

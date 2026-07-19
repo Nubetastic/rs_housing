@@ -1260,16 +1260,19 @@ RegisterNetEvent('rs_housing:client:sellInformation', function(propertyId, saleI
     ShowHousingNui({
         view = 'sell_confirm',
         title = 'Sell House',
-        subtitle = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive),
+        subtitle = '',
         sale = {
             house = tostring(CurrentProperty),
+            price = tonumber(property.sell.receive) or 0,
             ledger = tonumber(saleInformation.ledger) or 0,
             taxLedger = tonumber(saleInformation.taxLedger) or 0,
             refundAccount = saleInformation.refundAccount or 'bank',
+            refundAccountName = saleInformation.refundAccountName or saleInformation.refundAccount or 'bank',
             inventoryHasItems = saleInformation.inventoryHasItems
         },
         labels = {
             house = 'House #',
+            price = 'Sell Price',
             ledger = 'Money in Ledger',
             taxLedger = 'Unused Tax Money',
             inventory = 'House Inventory',

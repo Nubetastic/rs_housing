@@ -98,6 +98,8 @@
             text-transform: uppercase;
         }
 
+        #subtitle:empty { display: none; }
+
         #decorationView,
         #placementView,
         #housingLedgerView,
@@ -883,6 +885,9 @@
             const sale = data.sale || {};
             const inventoryKnown = typeof sale.inventoryHasItems === 'boolean';
             const inventoryHasItems = sale.inventoryHasItems === true;
+            const refundAccountName = sale.refundAccountName
+                ? String(sale.refundAccountName)
+                : accountLabel(sale.refundAccount);
 
             sellInformation.innerHTML = '';
             const appendStat = (label, value, className = '') => {
@@ -899,12 +904,13 @@
             };
 
             appendStat(labels.house || 'House #', sale.house);
+            appendStat(labels.price || 'Sell Price', money(sale.price));
             appendStat(labels.ledger || 'Money in Ledger', money(sale.ledger));
 
             const refundNote = document.createElement('div');
             refundNote.className = 'sale-note';
             refundNote.textContent = (labels.refundNote || 'Ledger funds will be deposited into your %s account.')
-                .replace('%s', accountLabel(sale.refundAccount));
+                .replace('%s', refundAccountName);
             sellInformation.appendChild(refundNote);
 
             appendStat(labels.taxLedger || 'Unused Tax Money', money(sale.taxLedger));
@@ -912,7 +918,7 @@
             const taxRefundNote = document.createElement('div');
             taxRefundNote.className = 'sale-note';
             taxRefundNote.textContent = (labels.taxRefundNote || 'Unused tax money will be deposited into your %s account.')
-                .replace('%s', accountLabel(sale.refundAccount));
+                .replace('%s', refundAccountName);
             sellInformation.appendChild(taxRefundNote);
 
             appendStat(
