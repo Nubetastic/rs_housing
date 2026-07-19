@@ -32,6 +32,7 @@ client_scripts {
     'client/update_property_values.lua'
 }
 server_scripts { 
+    'server/versionchecker.lua',
     'server/admin_disabled_properties.lua',
     'server/ambush.lua',
     'server/serverfurniture.lua',
