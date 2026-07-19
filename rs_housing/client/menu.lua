@@ -962,7 +962,8 @@ local function OpenHousingLedger()
             taxFunds = taxFunds,
             taxAtRisk = taxAtRisk,
             taxFunded = ('%d %s'):format(fundedPeriods, fundedUnit),
-            normalFunds = normalFunds
+            normalFunds = normalFunds,
+            taxEnabled = Config.TaxRepoSystem ~= nil and Config.TaxRepoSystem.Enabled == true
         },
         labels = {
             house = 'House #',
@@ -1248,6 +1249,44 @@ RegisterNetEvent('rs_housing:client:taxDueDate', function(propertyId, dueDate)
     end
 end)
 
+RegisterNetEvent('rs_housing:client:sellInformation', function(propertyId, saleInformation)
+    if tostring(propertyId) ~= tostring(CurrentProperty) then return end
+
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property or property.citizenid ~= PlayerData.CitizenId then return end
+
+    saleInformation = saleInformation or {}
+    ShowHousingNui({
+        view = 'sell_confirm',
+        title = 'Sell House',
+        subtitle = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive),
+        sale = {
+            house = tostring(CurrentProperty),
+            ledger = tonumber(saleInformation.ledger) or 0,
+            taxLedger = tonumber(saleInformation.taxLedger) or 0,
+            refundAccount = saleInformation.refundAccount or 'bank',
+            inventoryHasItems = saleInformation.inventoryHasItems
+        },
+        labels = {
+            house = 'House #',
+            ledger = 'Money in Ledger',
+            taxLedger = 'Unused Tax Money',
+            inventory = 'House Inventory',
+            inventoryHasItems = 'Has Items',
+            inventoryEmpty = 'Empty',
+            inventoryUnknown = 'Unable to Check',
+            refundNote = 'Ledger funds will be deposited into your %s account.',
+            taxRefundNote = 'Unused tax money will be deposited into your %s account.',
+            inventoryWarning = 'Inventory will not be transferred when the house is sold.'
+        },
+        items = {
+            { value = 'confirm_sell', label = Locales['MENU_SELL_ACCEPT'], description = Locales['MENU_SELL_ACCEPT_DESCRIPTION'] },
+            { value = 'cancel_sell', label = Locales['MENU_BACK'], description = '' }
+        }
+    })
+end)
+
 RegisterNetEvent('rs_housing:client:updateProperty', function(propertyId, actionType)
     if tostring(propertyId) ~= tostring(CurrentProperty) then return end
 
@@ -1322,15 +1361,7 @@ RegisterNUICallback('housingSelect', function(data, cb)
             NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
             return
         end
-        ShowHousingNui({
-            view = 'sell_confirm',
-            title = 'Sell House',
-            subtitle = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive),
-            items = {
-                { value = 'confirm_sell', label = Locales['MENU_SELL_ACCEPT'], description = Locales['MENU_SELL_ACCEPT_DESCRIPTION'] },
-                { value = 'cancel_sell', label = Locales['MENU_BACK'], description = '' }
-            }
-        })
+        TriggerServerEvent('rs_housing:server:requestSellInformation', CurrentProperty)
     elseif value == 'MENU_FURNITURE' then
         if HasPermissionByName(CurrentProperty, 'place_furniture', PlayerData.CitizenId) == 0 then
             NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
@@ -1347,6 +1378,9 @@ RegisterNUICallback('housingLedgerAction', function(data, cb)
     local action = data and data.action
     if HousingView ~= 'ledger'
         or (action ~= 'DEPOSIT' and action ~= 'WITHDRAW' and action ~= 'PAY_TAX') then return end
+
+    if action == 'PAY_TAX'
+        and (not Config.TaxRepoSystem or Config.TaxRepoSystem.Enabled ~= true) then return end
 
     local PlayerData = GetPlayerData()
     local permission = action == 'DEPOSIT' and 'ledgerhome_deposit'
@@ -1539,6 +1573,7 @@ Citizen.CreateThread(function()
 
                     PlayerData.IsInMenu = false
                     LocationType        = nil
+                    CurrentProperty     = nil
 
                     lib.notify({
                         title       = Locales['HOUSING_NOTI'],
@@ -1547,9 +1582,6 @@ Citizen.CreateThread(function()
                         duration    = 3000,
                         position    = 'top'
                     })
-
-                    Wait(500)
-                    OpenMenuManagement(CurrentProperty)
 
                 else
                     lib.notify({

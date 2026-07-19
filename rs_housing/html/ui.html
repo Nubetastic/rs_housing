@@ -310,6 +310,73 @@
         .property-stat.danger .stat-label,
         .property-stat.danger .stat-value { color: #ff6868; }
 
+        .sell-information {
+            display: none;
+            margin-bottom: 14px;
+            padding: 5px 18px;
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.035);
+        }
+
+        .sale-note {
+            margin: 12px -6px;
+            padding: 13px 14px;
+            border: 1px solid rgba(0,200,255,0.16);
+            border-radius: 9px;
+            color: rgba(190,230,255,0.82);
+            background: rgba(0,150,220,0.07);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            line-height: 1.45;
+            text-transform: uppercase;
+        }
+
+        .sale-note.danger {
+            border-color: rgba(255,70,70,0.34);
+            color: #ff7777;
+            background: rgba(210,35,35,0.14);
+            box-shadow: inset 3px 0 0 #ff5252;
+        }
+
+        #decorationView.sell-confirm #menuItems {
+            flex: 0 0 auto;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 11px;
+            margin-top: auto;
+            padding: 18px 0 0;
+            border-top: 1px solid rgba(0,200,255,0.09);
+            overflow: visible;
+        }
+
+        #decorationView.sell-confirm .menu-item {
+            min-height: 62px;
+            margin: 0;
+            padding: 13px 16px;
+            justify-content: center;
+            text-align: center;
+        }
+
+        #decorationView.sell-confirm .item-description { display: none; }
+        #decorationView.sell-confirm .item-label { font-size: 19px; }
+        #decorationView.sell-confirm .menu-item[data-value="confirm_sell"] {
+            color: #4dffa0;
+            border-color: rgba(0,200,80,0.26);
+            background: rgba(0,180,80,0.12);
+        }
+
+        #decorationView.sell-confirm .menu-item[data-value="cancel_sell"] {
+            color: #ff7070;
+            border-color: rgba(255,60,60,0.22);
+            background: rgba(220,40,40,0.1);
+        }
+
+        #decorationView.sell-confirm .menu-item.selected {
+            border-color: rgba(103,220,255,0.62);
+            box-shadow: inset 3px 0 0 #22cfff, 0 0 14px rgba(0,200,255,0.1);
+        }
+
         .stat-value {
             color: #f4f9ff;
             font-family: 'Share Tech Mono', monospace;
@@ -477,8 +544,9 @@
             <div id="subtitle"></div>
 
             <div id="decorationView">
+                <div class="sell-information" id="sellInformation"></div>
                 <div id="menuItems"></div>
-                <div class="key-help">↑ ↓ Navigate &nbsp; Enter / → Select &nbsp; ← Back &nbsp; Esc Exit</div>
+                <div class="key-help" id="menuKeyHelp">↑ ↓ Navigate &nbsp; Enter Select &nbsp; Backspace Back &nbsp; Esc Exit</div>
             </div>
 
             <div id="housingLedgerView">
@@ -556,6 +624,8 @@
         const housingPaymentView = document.getElementById('housingPaymentView');
         const housingKeyholdersView = document.getElementById('housingKeyholdersView');
         const menuItems = document.getElementById('menuItems');
+        const menuKeyHelp = document.getElementById('menuKeyHelp');
+        const sellInformation = document.getElementById('sellInformation');
         const propertyInformation = document.getElementById('propertyInformation');
         const paymentInformation = document.getElementById('paymentInformation');
         const keyholderLists = document.getElementById('keyholderLists');
@@ -584,10 +654,13 @@
 
         function hideViews() {
             decorationView.style.display = 'none';
+            decorationView.classList.remove('sell-confirm');
             placementView.style.display = 'none';
             housingLedgerView.style.display = 'none';
             housingPaymentView.style.display = 'none';
             housingKeyholdersView.style.display = 'none';
+            sellInformation.style.display = 'none';
+            sellInformation.innerHTML = '';
         }
 
         function money(value) {
@@ -645,6 +718,7 @@
 
         function updateItemRow(row, item, index) {
             row.dataset.key = String(item.key ?? index);
+            row.dataset.value = String(item.value ?? '');
             row.querySelector('.item-label').textContent = item.label || '';
             row.querySelector('.item-description').textContent = item.description || '';
         }
@@ -753,7 +827,7 @@
             if (!items.length) return;
             if (mode === 'decoration') {
                 post('decorationSelect', { index: selectedIndex + 1 });
-            } else if (mode === 'housing-menu') {
+            } else if (mode === 'housing-menu' || mode === 'housing-sell') {
                 post('housingSelect', { value: items[selectedIndex].value });
             }
         }
@@ -792,9 +866,73 @@
             deposit.textContent = labels.deposit || 'Deposit';
             withdraw.textContent = labels.withdraw || 'Withdraw';
             payTax.textContent = labels.payTax || 'Pay Tax';
+            payTax.disabled = property.taxEnabled === false;
             deposit.onclick = () => post('housingLedgerAction', { action: 'DEPOSIT' });
             withdraw.onclick = () => post('housingLedgerAction', { action: 'WITHDRAW' });
             payTax.onclick = () => post('housingLedgerAction', { action: 'PAY_TAX' });
+        }
+
+        function accountLabel(value) {
+            return String(value || 'bank')
+                .replace(/[_-]+/g, ' ')
+                .replace(/\b\w/g, character => character.toUpperCase());
+        }
+
+        function renderHousingSell(data) {
+            const labels = data.labels || {};
+            const sale = data.sale || {};
+            const inventoryKnown = typeof sale.inventoryHasItems === 'boolean';
+            const inventoryHasItems = sale.inventoryHasItems === true;
+
+            sellInformation.innerHTML = '';
+            const appendStat = (label, value, className = '') => {
+                const row = document.createElement('div');
+                row.className = `property-stat ${className}`.trim();
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'stat-label';
+                rowLabel.textContent = label;
+                const rowValue = document.createElement('div');
+                rowValue.className = 'stat-value';
+                rowValue.textContent = value ?? '';
+                row.append(rowLabel, rowValue);
+                sellInformation.appendChild(row);
+            };
+
+            appendStat(labels.house || 'House #', sale.house);
+            appendStat(labels.ledger || 'Money in Ledger', money(sale.ledger));
+
+            const refundNote = document.createElement('div');
+            refundNote.className = 'sale-note';
+            refundNote.textContent = (labels.refundNote || 'Ledger funds will be deposited into your %s account.')
+                .replace('%s', accountLabel(sale.refundAccount));
+            sellInformation.appendChild(refundNote);
+
+            appendStat(labels.taxLedger || 'Unused Tax Money', money(sale.taxLedger));
+
+            const taxRefundNote = document.createElement('div');
+            taxRefundNote.className = 'sale-note';
+            taxRefundNote.textContent = (labels.taxRefundNote || 'Unused tax money will be deposited into your %s account.')
+                .replace('%s', accountLabel(sale.refundAccount));
+            sellInformation.appendChild(taxRefundNote);
+
+            appendStat(
+                labels.inventory || 'House Inventory',
+                inventoryKnown
+                    ? (inventoryHasItems ? (labels.inventoryHasItems || 'Has Items') : (labels.inventoryEmpty || 'Empty'))
+                    : (labels.inventoryUnknown || 'Unable to Check'),
+                inventoryHasItems || !inventoryKnown ? 'danger' : ''
+            );
+
+            if (inventoryHasItems) {
+                const warning = document.createElement('div');
+                warning.className = 'sale-note danger';
+                warning.textContent = labels.inventoryWarning
+                    || 'Inventory will not be transferred when the house is sold.';
+                sellInformation.appendChild(warning);
+            }
+
+            decorationView.classList.add('sell-confirm');
+            sellInformation.style.display = 'block';
         }
 
         function renderPaymentLines(stats) {
@@ -1066,10 +1204,10 @@
                 } else if (event.key === 'ArrowDown') {
                     event.preventDefault();
                     moveSelection(1);
-                } else if (event.key === 'ArrowRight' || event.key === 'Enter') {
+                } else if (event.key === 'Enter') {
                     event.preventDefault();
                     selectCurrent();
-                } else if (event.key === 'ArrowLeft' || event.key === 'Backspace') {
+                } else if (event.key === 'Backspace') {
                     event.preventDefault();
                     post(mode === 'decoration' ? 'decorationBack' : 'housingBack');
                 } else if (event.key === 'Escape') {
@@ -1080,10 +1218,15 @@
                 if (mode === 'housing-payment' && event.key === 'Enter') {
                     event.preventDefault();
                     document.getElementById('paymentSubmitButton').click();
-                } else if (event.key === 'Backspace' || event.key === 'ArrowLeft') {
+                } else if (event.key === 'Backspace') {
                     event.preventDefault();
                     post('housingBack');
                 } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    post('housingClose');
+                }
+            } else if (mode === 'housing-sell') {
+                if (event.key === 'Escape') {
                     event.preventDefault();
                     post('housingClose');
                 }
@@ -1129,11 +1272,17 @@
                     housingKeyholdersView.style.display = 'flex';
                     renderHousingKeyholders(data);
                 } else {
-                    mode = 'housing-menu';
+                    mode = data.view === 'sell_confirm' ? 'housing-sell' : 'housing-menu';
                     items = Array.isArray(data.items) ? data.items : [];
                     selectedIndex = 0;
                     window.emptyText = data.emptyText || 'No options available.';
                     decorationView.style.display = 'flex';
+                    if (data.view === 'sell_confirm') {
+                        menuKeyHelp.textContent = 'Mouse click required to confirm or go back   •   Esc Exit';
+                        renderHousingSell(data);
+                    } else {
+                        menuKeyHelp.textContent = '↑ ↓ Navigate   Enter Select   Backspace Back   Esc Exit';
+                    }
                     renderItems(false);
                 }
                 return;
@@ -1149,6 +1298,7 @@
                 window.emptyText = data.emptyText;
                 document.getElementById('title').textContent = data.title || 'Decoration Menu';
                 document.getElementById('subtitle').textContent = data.subtitle || '';
+                menuKeyHelp.textContent = '↑ ↓ Navigate   Enter Select   Backspace Back   Esc Exit';
                 panel.style.display = 'block';
                 hideViews();
                 decorationView.style.display = 'flex';

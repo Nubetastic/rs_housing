@@ -20,9 +20,13 @@
   characters) and nearby non-keyholders inside the property's `actionsRange`.
 - Keyholders can be removed with `-`; nearby players can be added with `+`.
 - Selecting a keyholder's name opens their existing permission toggles.
-- Selling or losing a property to repossession transfers its normal-ledger
-  balance to the former owner's configured default bank, including offline
-  characters. Ownership is retained if that refund fails.
+- Selling a property transfers both its normal-ledger balance and any unused
+  tax-ledger balance to the former owner's configured default bank. Repossession
+  continues to refund the normal ledger. Offline characters are supported, and
+  ownership is retained if the required refund fails.
+- The Sell House confirmation shows the house number, refundable Money Ledger
+  balance, destination account, and a red warning when the persistent house
+  inventory contains items.
 
 ## New commands
 

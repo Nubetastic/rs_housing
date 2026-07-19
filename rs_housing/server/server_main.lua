@@ -120,7 +120,11 @@ function GetProperties()
     return Properties
 end
 
-local function TransferNormalLedgerToBank(citizenid, amount, reason)
+local function GetLedgerRefundBankType()
+    return (Config.TaxRepoSystem and Config.TaxRepoSystem.DefaultBank) or 'bank'
+end
+
+local function TransferLedgerFundsToBank(citizenid, amount, reason)
     amount = tonumber(amount) or 0
     if amount <= 0 then return true end
     if not citizenid then return false, 'missing citizen id' end
@@ -135,11 +139,11 @@ local function TransferNormalLedgerToBank(citizenid, amount, reason)
 
     if not Player then return false, 'player not found' end
 
-    local bankType = (Config.TaxRepoSystem and Config.TaxRepoSystem.DefaultBank) or 'bank'
+    local bankType = GetLedgerRefundBankType()
     local success = Player.Functions.AddMoney(
         bankType,
         amount,
-        reason or 'rs_housing-normal-ledger-refund'
+        reason or 'rs_housing-ledger-refund'
     )
 
     if not success then return false, ('unable to add money to %s'):format(bankType) end
@@ -149,6 +153,24 @@ local function TransferNormalLedgerToBank(citizenid, amount, reason)
     end
 
     return true
+end
+
+local function PropertyInventoryHasItems(propertyId)
+    if GetResourceState('rsg-inventory') ~= 'started' then return nil end
+
+    local success, inventory = pcall(function()
+        return exports['rsg-inventory']:GetInventory('inventoryhome_' .. propertyId)
+    end)
+    if not success then return nil end
+    if not inventory or type(inventory.items) ~= 'table' then return false end
+
+    for _, item in pairs(inventory.items) do
+        if type(item) == 'table' and (tonumber(item.amount or item.count) or 0) > 0 then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function IsPlayerWithinPropertyActions(property, playerSource)
@@ -373,19 +395,21 @@ AddEventHandler("rs_housing:server:sell", function(propertyId)
     end
 
     local steamName = PlayerData.steamName
-    local normalLedger = tonumber(property.ledgerhome) or 0
+    local normalLedger = math.max(0, tonumber(property.ledgerhome) or 0)
+    local taxLedger = math.max(0, tonumber(property.ledger) or 0)
+    local totalLedgerRefund = normalLedger + taxLedger
 
-    local refunded, refundError = TransferNormalLedgerToBank(
+    local refunded, refundError = TransferLedgerFundsToBank(
         property.citizenid,
-        normalLedger,
+        totalLedgerRefund,
         ('rs_housing-property-%s-sold'):format(propertyId)
     )
     if not refunded then
-        print(('[rs_housing] Normal ledger refund failed for property %s: %s'):format(
+        print(('[rs_housing] Property ledger refund failed for property %s: %s'):format(
             propertyId,
             refundError or 'unknown error'
         ))
-        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['NORMAL_LEDGER_REFUND_FAILED'])
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['PROPERTY_LEDGER_REFUND_FAILED'])
         return
     end
 
@@ -434,12 +458,38 @@ AddEventHandler("rs_housing:server:sell", function(propertyId)
         )
     end
 
+    if taxLedger > 0 then
+        notiMainSuccess(
+            _source,
+            Locales['HOUSING_NOTI'],
+            string.format(Locales['TAX_LEDGER_REFUNDED'], taxLedger)
+        )
+    end
+
     local webhookData = Config.Webhooking['SOLD']
     if webhookData.Enabled then
         local title   = "🏠`Property Sold`"
         local message = string.format("The following property with id: **`( %s )`** has been placed for sale.\n\nPlayer `%s` received: %s dollars.", propertyId, steamName, receiveAmount)
         RSGCore.Functions.TriggerCallback('rsg-core:server:DiscordWebhook', false, webhookData.Url, title, message, webhookData.Color)
     end
+end)
+
+RegisterNetEvent('rs_housing:server:requestSellInformation', function(propertyId)
+    local _source = source
+    local property = Properties[propertyId]
+    local PlayerData = GetPlayerData(_source)
+
+    if not property or not PlayerData or property.citizenid ~= PlayerData.citizenid then
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+
+    TriggerClientEvent('rs_housing:client:sellInformation', _source, propertyId, {
+        ledger = tonumber(property.ledgerhome) or 0,
+        taxLedger = tonumber(property.ledger) or 0,
+        refundAccount = GetLedgerRefundBankType(),
+        inventoryHasItems = PropertyInventoryHasItems(propertyId)
+    })
 end)
 
 RegisterServerEvent('rs_housing:server:updateAccountLedgerById')
@@ -720,7 +770,7 @@ if Config.TaxRepoSystem and Config.TaxRepoSystem.Enabled then
 
                     local ownerCitizenId = property.citizenid
                     local normalLedger = tonumber(property.ledgerhome) or 0
-                    local refunded, refundError = TransferNormalLedgerToBank(
+                    local refunded, refundError = TransferLedgerFundsToBank(
                         ownerCitizenId,
                         normalLedger,
                         ('rs_housing-property-%s-repossessed'):format(id)
