@@ -16,11 +16,30 @@ shared_scripts {
 }
 client_scripts { 
     '@ox_lib/init.lua',
-    'doorhashes.lua', 
-    'client/*.lua' 
+    'doorhashes.lua',
+    'client/admin_disabled_properties.lua',
+    'client/clientfurniture.lua',
+    'client/clientshop.lua',
+    'client/doorInfo.lua',
+    'client/doorlocks.lua',
+    'client/functions.lua',
+    'client/main.lua',
+    'client/menu.lua',
+
+    -- One-time property value updater. Comment this line out after running UpdatePropertyValues.
+    'client/update_property_values.lua'
 }
 server_scripts { 
-    'server/*.lua' 
+    'server/admin_disabled_properties.lua',
+    'server/ambush.lua',
+    'server/serverfurniture.lua',
+    'server/servershop.lua',
+    'server/server_doorlocks.lua',
+    'server/server_keyholders.lua',
+    'server/server_main.lua',
+
+    -- One-time property value updater. Comment this line out after running UpdatePropertyValues.
+    'server/update_property_values.lua'
 }
 
 lua54 'yes'

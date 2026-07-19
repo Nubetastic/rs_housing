@@ -1,362 +1,502 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background: transparent;
+            color: #e8f4ff;
             font-family: 'Rajdhani', sans-serif;
             overflow: hidden;
+            user-select: none;
         }
 
         #panel {
             position: absolute;
             top: 50%;
-            right: 3%;
+            right: 2%;
+            width: 600px;
+            height: min(1040px, 96vh);
             transform: translateY(-50%);
-            width: 230px;
             display: none;
-            animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: slideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-50%) translateX(30px); }
-            to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+            from { opacity: 0; transform: translateY(-50%) translateX(60px); }
+            to { opacity: 1; transform: translateY(-50%) translateX(0); }
         }
 
-        /* Glass card */
         .card {
-            background: linear-gradient(145deg, rgba(10,12,20,0.92), rgba(5,8,18,0.96));
+            width: 100%;
+            height: 100%;
+            padding: 32px 28px 28px;
+            background: linear-gradient(145deg, rgba(10,12,20,0.94), rgba(5,8,18,0.97));
             border: 1px solid rgba(0,200,255,0.18);
-            border-radius: 12px;
-            padding: 18px 16px 16px;
-            box-shadow:
-                0 0 0 1px rgba(0,200,255,0.05),
-                0 20px 60px rgba(0,0,0,0.7),
-                inset 0 1px 0 rgba(255,255,255,0.06);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
             backdrop-filter: blur(20px);
-            position: relative;
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
+            position: relative;
         }
 
-        /* Subtle corner accent */
         .card::before {
             content: '';
             position: absolute;
-            top: 0; left: 0;
-            width: 60px; height: 60px;
-            background: radial-gradient(circle at top left, rgba(0,200,255,0.12), transparent 70%);
-            pointer-events: none;
-        }
-        .card::after {
-            content: '';
-            position: absolute;
-            bottom: 0; right: 0;
-            width: 80px; height: 80px;
-            background: radial-gradient(circle at bottom right, rgba(0,140,255,0.08), transparent 70%);
+            top: 0;
+            left: 0;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle at top left, rgba(0,200,255,0.14), transparent 70%);
             pointer-events: none;
         }
 
-        /* Header */
         .header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
+            gap: 18px;
+            min-height: 78px;
+            padding-bottom: 20px;
             border-bottom: 1px solid rgba(0,200,255,0.12);
+            position: relative;
+            z-index: 1;
         }
 
         .header-icon {
-            width: 28px; height: 28px;
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            color: #67dcff;
             background: linear-gradient(135deg, rgba(0,200,255,0.2), rgba(0,100,255,0.15));
             border: 1px solid rgba(0,200,255,0.3);
-            border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
+            font-size: 28px;
         }
-        .header-icon svg { width: 14px; height: 14px; }
 
         h3 {
-            font-size: 14px;
+            font-size: 27px;
             font-weight: 700;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
-            color: #e8f4ff;
         }
 
-        /* Speed section */
-        .section-label {
+        #subtitle {
+            min-height: 62px;
+            padding: 16px 2px 14px;
+            color: rgba(205,225,245,0.6);
             font-family: 'Share Tech Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            color: rgba(0,200,255,0.6);
+            font-size: 16px;
+            line-height: 1.45;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            margin-bottom: 6px;
+        }
+
+        #decorationView,
+        #placementView {
+            min-height: 0;
+            flex: 1;
+            display: none;
+            flex-direction: column;
+        }
+
+        #menuItems {
+            min-height: 0;
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        #menuItems::-webkit-scrollbar { width: 7px; }
+        #menuItems::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+        #menuItems::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.3); border-radius: 4px; }
+
+        .menu-item {
+            width: 100%;
+            min-height: 86px;
+            margin-bottom: 10px;
+            padding: 15px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.07);
+            background: rgba(255,255,255,0.035);
+            color: rgba(220,235,255,0.82);
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            cursor: pointer;
+            transition: 0.14s ease;
         }
 
-        #speedVal {
-            color: rgba(0,220,255,0.9);
+        .menu-item.selected {
+            color: #fff;
+            background: rgba(0,200,255,0.13);
+            border-color: rgba(0,200,255,0.42);
+            box-shadow: inset 3px 0 0 #22cfff, 0 0 14px rgba(0,200,255,0.1);
         }
 
-        .slider-wrap {
-            margin-bottom: 14px;
-            position: relative;
+        .item-label {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.055em;
+            text-transform: uppercase;
         }
+
+        .item-description {
+            max-width: 190px;
+            color: rgba(103,220,255,0.75);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            line-height: 1.35;
+            text-align: right;
+        }
+
+        .empty {
+            margin-top: 36px;
+            text-align: center;
+            color: rgba(255,255,255,0.35);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+
+        .key-help {
+            min-height: 54px;
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(0,200,255,0.09);
+            color: rgba(255,255,255,0.34);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 0.04em;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .section-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 13px 0 11px;
+            color: rgba(0,200,255,0.62);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        #speedVal { color: rgba(0,220,255,0.95); }
 
         input[type=range] {
-            -webkit-appearance: none;
+            appearance: none;
             width: 100%;
-            height: 3px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 2px;
+            height: 6px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.09);
+            border-radius: 3px;
             outline: none;
-            cursor: pointer;
-            position: relative;
         }
+
         input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 14px; height: 14px;
+            appearance: none;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             background: linear-gradient(135deg, #00c8ff, #0080ff);
-            border: 2px solid rgba(0,200,255,0.5);
+            border: 2px solid rgba(0,200,255,0.55);
             box-shadow: 0 0 8px rgba(0,200,255,0.5);
-            cursor: pointer;
-            transition: box-shadow 0.15s;
-        }
-        input[type=range]::-webkit-slider-thumb:hover {
-            box-shadow: 0 0 14px rgba(0,200,255,0.8);
         }
 
-        /* Divider */
-        .divider {
-            height: 1px;
-            background: rgba(0,200,255,0.08);
-            margin: 12px 0;
-        }
-
-        /* Button groups */
         .group-label {
+            margin: 13px 0 9px;
+            color: rgba(255,255,255,0.3);
             font-family: 'Share Tech Mono', monospace;
-            font-size: 9px;
-            letter-spacing: 0.12em;
-            color: rgba(255,255,255,0.25);
+            font-size: 14px;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
-            margin-bottom: 6px;
         }
 
-        .btn-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px;
-            margin-bottom: 8px;
-        }
-
-        button {
-            font-family: 'Rajdhani', sans-serif;
-            font-weight: 600;
-            font-size: 11px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            padding: 7px 4px;
-            background: rgba(255,255,255,0.04);
-            color: rgba(220,235,255,0.85);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.15s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            position: relative;
-            overflow: hidden;
-        }
-        button:hover {
-            background: rgba(0,200,255,0.1);
-            border-color: rgba(0,200,255,0.3);
-            color: #fff;
-            box-shadow: 0 0 10px rgba(0,200,255,0.15);
-        }
-        button:active {
-            transform: scale(0.96);
-            background: rgba(0,200,255,0.18);
-        }
-
-        /* Confirm / Cancel */
+        .btn-grid,
         .actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            margin-top: 14px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(0,200,255,0.08);
+            gap: 11px;
         }
 
-        .btn-confirm {
-            background: rgba(0,180,80,0.12) !important;
-            border-color: rgba(0,200,80,0.25) !important;
-            color: #4dffa0 !important;
-        }
-        .btn-confirm:hover {
-            background: rgba(0,180,80,0.25) !important;
-            box-shadow: 0 0 12px rgba(0,200,80,0.25) !important;
-        }
-
-        .btn-cancel {
-            background: rgba(220,40,40,0.1) !important;
-            border-color: rgba(255,60,60,0.2) !important;
-            color: #ff7070 !important;
-        }
-        .btn-cancel:hover {
-            background: rgba(220,40,40,0.22) !important;
-            box-shadow: 0 0 12px rgba(255,60,60,0.2) !important;
+        button {
+            min-height: 58px;
+            padding: 12px 9px;
+            color: rgba(220,235,255,0.86);
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 19px;
+            font-weight: 700;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.14s ease;
         }
 
-        /* Icon SVGs inline */
-        .ico { display: inline-block; vertical-align: middle; }
+        button:hover {
+            color: #fff;
+            background: rgba(0,200,255,0.12);
+            border-color: rgba(0,200,255,0.34);
+        }
+
+        .actions {
+            margin-top: auto;
+            padding-top: 18px;
+            border-top: 1px solid rgba(0,200,255,0.09);
+        }
+
+        .btn-confirm { color: #4dffa0; border-color: rgba(0,200,80,0.26); background: rgba(0,180,80,0.12); }
+        .btn-cancel { color: #ff7070; border-color: rgba(255,60,60,0.22); background: rgba(220,40,40,0.1); }
     </style>
 </head>
 <body>
+    <div id="panel">
+        <div class="card">
+            <div class="header">
+                <div class="header-icon">✦</div>
+                <h3 id="title">Decoration Menu</h3>
+            </div>
+            <div id="subtitle"></div>
 
-<div id="panel">
-  <div class="card">
+            <div id="decorationView">
+                <div id="menuItems"></div>
+                <div class="key-help">↑ ↓ Navigate &nbsp; Enter / → Select &nbsp; ← Back &nbsp; Esc Exit</div>
+            </div>
 
-    <!-- Header -->
-    <div class="header">
-      <div class="header-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,255,0.9)" stroke-width="2" stroke-linecap="round">
-          <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
-          <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
-        </svg>
-      </div>
-      <h3 id="title"></h3>
+            <div id="placementView">
+                <div class="section-label">
+                    <span id="speedLabel"></span>
+                    <span id="speedVal">0.50</span>
+                </div>
+                <input type="range" min="0.01" max="2" step="0.01" value="0.5" id="speed">
+
+                <div class="group-label" id="positionGroupLabel"></div>
+                <div class="btn-grid">
+                    <button onclick="sendPlacement('y_plus')" id="forwardLabel"></button>
+                    <button onclick="sendPlacement('y_minus')" id="backwardLabel"></button>
+                    <button onclick="sendPlacement('x_plus')" id="leftLabel"></button>
+                    <button onclick="sendPlacement('x_minus')" id="rightLabel"></button>
+                </div>
+
+                <div class="group-label" id="elevationGroupLabel"></div>
+                <div class="btn-grid">
+                    <button onclick="sendPlacement('z_plus')" id="upLabel"></button>
+                    <button onclick="sendPlacement('z_minus')" id="downLabel"></button>
+                </div>
+
+                <div class="group-label" id="rotationGroupLabel"></div>
+                <div class="btn-grid">
+                    <button onclick="sendPlacement('rot_plus')" id="rotPlusLabel"></button>
+                    <button onclick="sendPlacement('rot_minus')" id="rotMinusLabel"></button>
+                </div>
+
+                <div class="actions">
+                    <button class="btn-confirm" onclick="sendPlacement('confirm')" id="confirmLabel"></button>
+                    <button class="btn-cancel" onclick="sendPlacement('cancel')" id="cancelLabel"></button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Speed -->
-    <div class="section-label">
-      <span id="speedLabel"></span>
-      <span id="speedVal">0.50</span>
-    </div>
-    <div class="slider-wrap">
-      <input type="range" min="0.01" max="2" step="0.01" value="0.5" id="speed"
-             oninput="document.getElementById('speedVal').textContent=parseFloat(this.value).toFixed(2)">
-    </div>
+    <script>
+        const panel = document.getElementById('panel');
+        const decorationView = document.getElementById('decorationView');
+        const placementView = document.getElementById('placementView');
+        const menuItems = document.getElementById('menuItems');
+        const speed = document.getElementById('speed');
+        const speedVal = document.getElementById('speedVal');
 
-    <div class="divider"></div>
+        let mode = null;
+        let items = [];
+        let selectedIndex = 0;
+        let cameraHoldTimer = null;
 
-    <!-- Position -->
-    <div class="group-label" id="positionGroupLabel"></div>
-    <div class="btn-grid">
-      <button id="forward"  onclick="send('y_plus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,1 9,9 1,9" fill="currentColor"/></svg>
-        <span id="forwardLabel"></span>
-      </button>
-      <button id="backward" onclick="send('y_minus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,9 1,1 9,1" fill="currentColor"/></svg>
-        <span id="backwardLabel"></span>
-      </button>
-      <button id="left"  onclick="send('x_plus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="1,5 9,1 9,9" fill="currentColor"/></svg>
-        <span id="leftLabel"></span>
-      </button>
-      <button id="right" onclick="send('x_minus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="9,5 1,1 1,9" fill="currentColor"/></svg>
-        <span id="rightLabel"></span>
-      </button>
-    </div>
-
-    <!-- Elevation -->
-    <div class="group-label" id="elevationGroupLabel"></div>
-    <div class="btn-grid">
-      <button id="up"   onclick="send('z_plus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,1 9,9 1,9" fill="currentColor"/></svg>
-        <span id="upLabel"></span>
-      </button>
-      <button id="down" onclick="send('z_minus')">
-        <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,9 1,1 9,1" fill="currentColor"/></svg>
-        <span id="downLabel"></span>
-      </button>
-    </div>
-
-    <!-- Rotation -->
-    <div class="group-label" id="rotationGroupLabel"></div>
-    <div class="btn-grid">
-      <button id="rotPlus"  onclick="send('rot_plus')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/>
-        </svg>
-        <span id="rotPlusLabel"></span>
-      </button>
-      <button id="rotMinus" onclick="send('rot_minus')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" transform="scale(-1,1)" style="transform:scaleX(-1)">
-          <path d="M21 12a9 9 0 1 1-9-9"/><polyline points="16 3 21 3 21 8"/>
-        </svg>
-        <span id="rotMinusLabel"></span>
-      </button>
-    </div>
-
-    <!-- Actions -->
-    <div class="actions">
-      <button id="confirm" class="btn-confirm" onclick="send('confirm')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        <span id="confirmLabel"></span>
-      </button>
-      <button id="cancel" class="btn-cancel" onclick="send('cancel')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        <span id="cancelLabel"></span>
-      </button>
-    </div>
-
-  </div>
-</div>
-
-<script>
-    function send(action){
-        fetch(`https://${GetParentResourceName()}/menuAction`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-            body: JSON.stringify({
-                action: action,
-                speed: document.getElementById("speed").value
-            })
-        });
-    }
-
-    window.addEventListener("message", function(e){
-        if(e.data.show){
-            const panel = document.getElementById("panel");
-            panel.style.display = "block";
-
-            if(e.data.lang){
-                const l = e.data.lang;
-                document.getElementById("title").innerText              = l.title         || "";
-                document.getElementById("speedLabel").innerText         = l.speed         || "";
-                document.getElementById("positionGroupLabel").innerText = l.positionGroup || "";
-                document.getElementById("elevationGroupLabel").innerText= l.elevationGroup|| "";
-                document.getElementById("rotationGroupLabel").innerText = l.rotationGroup || "";
-                document.getElementById("forwardLabel").innerText       = l.forward       || "";
-                document.getElementById("backwardLabel").innerText      = l.backward      || "";
-                document.getElementById("leftLabel").innerText          = l.left          || "";
-                document.getElementById("rightLabel").innerText         = l.right         || "";
-                document.getElementById("upLabel").innerText            = l.up            || "";
-                document.getElementById("downLabel").innerText          = l.down          || "";
-                document.getElementById("rotPlusLabel").innerText       = l.rotPlus       || "";
-                document.getElementById("rotMinusLabel").innerText      = l.rotMinus      || "";
-                document.getElementById("confirmLabel").innerText       = l.confirm       || "";
-                document.getElementById("cancelLabel").innerText        = l.cancel        || "";
-            }
-        } else {
-            document.getElementById("panel").style.display = "none";
+        function post(name, body = {}) {
+            return fetch(`https://${GetParentResourceName()}/${name}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+                body: JSON.stringify(body)
+            });
         }
-    });
-</script>
 
+        function sendPlacement(action) {
+            post('menuAction', { action, speed: speed.value });
+        }
+
+        function notifySelection() {
+            if (!items.length) return;
+            post('decorationNavigate', { index: selectedIndex + 1 });
+        }
+
+        function renderItems(notify = true) {
+            menuItems.innerHTML = '';
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'empty';
+                empty.textContent = window.emptyText || 'No furniture available.';
+                menuItems.appendChild(empty);
+                return;
+            }
+
+            selectedIndex = Math.max(0, Math.min(selectedIndex, items.length - 1));
+
+            items.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = `menu-item${index === selectedIndex ? ' selected' : ''}`;
+                row.innerHTML = `
+                    <div class="item-label"></div>
+                    <div class="item-description"></div>
+                `;
+                row.querySelector('.item-label').textContent = item.label || '';
+                row.querySelector('.item-description').textContent = item.description || '';
+                row.addEventListener('mouseenter', () => setSelected(index));
+                row.addEventListener('click', () => {
+                    setSelected(index);
+                    selectCurrent();
+                });
+                menuItems.appendChild(row);
+            });
+
+            const selected = menuItems.children[selectedIndex];
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+            if (notify) notifySelection();
+        }
+
+        function setSelected(index) {
+            if (!items.length || index === selectedIndex) return;
+            selectedIndex = (index + items.length) % items.length;
+            renderItems();
+        }
+
+        function moveSelection(direction) {
+            if (!items.length) return;
+            selectedIndex = (selectedIndex + direction + items.length) % items.length;
+            renderItems();
+        }
+
+        function selectCurrent() {
+            if (!items.length) return;
+            post('decorationSelect', { index: selectedIndex + 1 });
+        }
+
+        speed.addEventListener('input', () => {
+            speedVal.textContent = Number(speed.value).toFixed(2);
+        });
+
+        window.addEventListener('mousedown', event => {
+            if (panel.style.display !== 'block') return;
+
+            if (event.button === 2) {
+                event.preventDefault();
+                post('cameraDragStart', { button: 'right' });
+                return;
+            }
+
+            if (event.button === 0) {
+                cameraHoldTimer = window.setTimeout(() => {
+                    cameraHoldTimer = null;
+                    post('cameraDragStart', { button: 'left' });
+                }, 150);
+            }
+        }, true);
+
+        window.addEventListener('mouseup', event => {
+            if (event.button !== 0 || cameraHoldTimer === null) return;
+            window.clearTimeout(cameraHoldTimer);
+            cameraHoldTimer = null;
+        }, true);
+
+        window.addEventListener('contextmenu', event => event.preventDefault());
+
+        window.addEventListener('keydown', event => {
+            if (panel.style.display !== 'block') return;
+
+            if (mode === 'decoration') {
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    moveSelection(-1);
+                } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    moveSelection(1);
+                } else if (event.key === 'ArrowRight' || event.key === 'Enter') {
+                    event.preventDefault();
+                    selectCurrent();
+                } else if (event.key === 'ArrowLeft' || event.key === 'Backspace') {
+                    event.preventDefault();
+                    post('decorationBack');
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    post('decorationClose');
+                }
+            } else if (mode === 'placement' && event.key === 'Escape') {
+                event.preventDefault();
+                sendPlacement('cancel');
+            }
+        });
+
+        window.addEventListener('message', event => {
+            const data = event.data || {};
+
+            if (data.action === 'close' || data.show === false) {
+                panel.style.display = 'none';
+                decorationView.style.display = 'none';
+                placementView.style.display = 'none';
+                mode = null;
+                return;
+            }
+
+            if (data.action === 'decoration') {
+                mode = 'decoration';
+                items = Array.isArray(data.items) ? data.items : [];
+                selectedIndex = 0;
+                window.emptyText = data.emptyText;
+                document.getElementById('title').textContent = data.title || 'Decoration Menu';
+                document.getElementById('subtitle').textContent = data.subtitle || '';
+                panel.style.display = 'block';
+                decorationView.style.display = 'flex';
+                placementView.style.display = 'none';
+                renderItems();
+                return;
+            }
+
+            if (data.action === 'placement' || data.show === true) {
+                mode = 'placement';
+                items = [];
+                const lang = data.lang || {};
+                document.getElementById('title').textContent = lang.title || 'Furniture Placement';
+                document.getElementById('subtitle').textContent = 'Position and confirm your furniture';
+                document.getElementById('speedLabel').textContent = lang.speed || 'Speed';
+                document.getElementById('positionGroupLabel').textContent = lang.positionGroup || 'Position';
+                document.getElementById('elevationGroupLabel').textContent = lang.elevationGroup || 'Elevation';
+                document.getElementById('rotationGroupLabel').textContent = lang.rotationGroup || 'Rotation';
+                document.getElementById('forwardLabel').textContent = lang.forward || 'Forward';
+                document.getElementById('backwardLabel').textContent = lang.backward || 'Backward';
+                document.getElementById('leftLabel').textContent = lang.left || 'Left';
+                document.getElementById('rightLabel').textContent = lang.right || 'Right';
+                document.getElementById('upLabel').textContent = lang.up || 'Up';
+                document.getElementById('downLabel').textContent = lang.down || 'Down';
+                document.getElementById('rotPlusLabel').textContent = lang.rotPlus || 'Rotate +';
+                document.getElementById('rotMinusLabel').textContent = lang.rotMinus || 'Rotate -';
+                document.getElementById('confirmLabel').textContent = lang.confirm || 'Confirm';
+                document.getElementById('cancelLabel').textContent = lang.cancel || 'Cancel';
+                panel.style.display = 'block';
+                decorationView.style.display = 'none';
+                placementView.style.display = 'flex';
+            }
+        });
+    </script>
 </body>
 </html>

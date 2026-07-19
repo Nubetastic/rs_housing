@@ -147,6 +147,9 @@ Config.PropOffset = {
 Config.furnitureitems = false  
 Config.furniturelimit = 100    -- limit of furniture per player
 Config.furnituresellrate = 0.6 -- 0.6 equals 60% of the item's original price when selling furniture
+Config.DecorationPreviewDistance = 2.0 -- Distance the furniture preview stays in front of the player.
+Config.DecorationPreviewSpawnDelay = 250 -- Delay in milliseconds before spawning the selected preview.
+Config.DecorationPreviewCleanupRadius = 10.0 -- Radius used to remove orphaned ghost previews.
 Config.furniture = {
     ["Chairs"] = {
         ["Outdoor Chair 1"] = { cost = 10, hash = `mp005_s_posse_trad_chair01x`, item = "furniture_31"},
@@ -309,7 +312,18 @@ Config.furniture = {
         ["Native Arms"] = { cost = 10, hash = `p_spookynative05x`, item = "furniture_140"},
     },
 }
+-- Only properties listed here will be loaded by the script.
+-- IDs may be written as numbers or strings. An empty list disables all properties.
+Config.AllowProperties = {14, 1, 38, 30, 23, 5, 35, 40, 41}
 
+Config.PropertiesOverrides = { -- /UpdatePropertyValues command to update config.lua values.
+    enable = true,
+    taxAmount = .10, -- 10% of buy price.
+    sellPrice = .75, -- 75% of buy price.
+    ledgerLimit = 5000, -- Maximum amount stored in the separate Home Ledger.
+    defaultStorageWeight = 50000, -- Base storage for all houses.
+    additionalStorageWeight = {1000, 200}, -- Add 1000 weight per complete $200 of buy price.
+}
 
 -- (!) DO NOT SET THE PROPERTY NAMES AS INTEGERS (EX: [1] = {} ), Should be like ['1'] = {} Instead to become a STRING (TEXT).
 Config.Properties = {
@@ -358,17 +372,17 @@ Config.Properties = {
         },
 
         -- Amount received when selling the house
-        sell = { receive = 175 }, 
+        sell = { receive = 5250 },
 
         -- If Config.TaxRepoSystem is true this is the amount charged for taxes and if Config.TaxRepoSystem
         -- is true the house menu will show the tax ledger that only allows depositing this amount
-        tax = 25,
+        tax = 700,
     
         -- Maximum amount of money allowed in the Home Ledger
         ledgerLimit = 5000,
 
         -- Inventory space 1000000 = 1000kg  100000 = 100kg  10000 = 10kg
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 85000,
     
         -- Maximum distance from the house where you can place the inventory or wardrobe
         actionsRange = 15.0,  
@@ -385,10 +399,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 150},
         },
-        sell = { receive = 75 }, 
-        tax = 25,
+        sell = { receive = 112 },
+        tax = 15,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 10.0,
     },
     ['3'] = {
@@ -419,10 +433,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 20.0,
     },
     ['4'] = {
@@ -445,10 +459,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 20.0,
     },
     ['5'] = {
@@ -471,10 +485,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 300},
         },
-        sell = { receive = 150 }, -- 300 / 2 = 150 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 225 },
+        tax = 30,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 20.0,
     },
     ['6'] = {
@@ -497,10 +511,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 300},
         },
-        sell = { receive = 150 }, -- 300 / 2 = 150 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 225 },
+        tax = 30,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 20.0,
     },
     ['7'] = {
@@ -524,10 +538,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 150},
         },
-        sell = { receive = 75 }, 
-        tax = 25,
+        sell = { receive = 112 },
+        tax = 15,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 10.0,
     },
     ['8'] = {
@@ -551,10 +565,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 100},
         },
-        sell = { receive = 50 }, -- 100 / 2 = 50 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 75 },
+        tax = 10,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 10.0,
     },
     ['9'] = {
@@ -577,10 +591,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 100},
         },
-        sell = { receive = 50 }, -- 100 / 2 = 50 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 75 },
+        tax = 10,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 10.0,
     },
     ['10'] = {
@@ -610,10 +624,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['11'] = {
@@ -643,10 +657,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 10.0,
     },
     ['12'] = {
@@ -690,10 +704,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 20.0,
     },
     ['13'] = {
@@ -716,10 +730,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['14'] = {
@@ -750,10 +764,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 750},
         },
-        sell = { receive = 375 }, -- 750 / 2 = 375 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 562 },
+        tax = 75,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 53000,
         actionsRange = 15.0,
     },
     ['15'] = {
@@ -783,10 +797,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 15.0,
     },
     ['16'] = {
@@ -816,10 +830,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 15.0,
     },
     ['17'] = {
@@ -879,10 +893,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 1000},
         },
-        sell = { receive = 500 }, -- 1000 / 2 = 500 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 750 },
+        tax = 100,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 55000,
         actionsRange = 20.0,
     },
     ['18'] = {
@@ -913,10 +927,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 150},
         },
-        sell = { receive = 75 }, 
-        tax = 25,
+        sell = { receive = 112 },
+        tax = 15,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 7.0,
     },
     ['19'] = {
@@ -962,10 +976,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 50.0,
     },
     ['20'] = {
@@ -995,10 +1009,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 100},
         },
-        sell = { receive = 50 }, -- 100 / 2 = 50 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 75 },
+        tax = 10,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 10.0,
     },
     ['21'] = {
@@ -1028,10 +1042,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 12.0,
 
     },
@@ -1055,10 +1069,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 10.0,
     },
     ['23'] = {
@@ -1088,10 +1102,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['24'] = {
@@ -1114,10 +1128,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['25'] = {
@@ -1147,10 +1161,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 750},
         },
-        sell = { receive = 375 }, -- 750 / 2 = 375 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 562 },
+        tax = 75,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 53000,
         actionsRange = 15.0,
     },
     ['26'] = {
@@ -1181,10 +1195,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 },
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['27'] = {
@@ -1214,10 +1228,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 750},
         },
-        sell = { receive = 375 }, -- 750 / 2 = 375 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 562 },
+        tax = 75,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 53000,
         actionsRange = 15.0,
     },
     ['28'] = {
@@ -1247,10 +1261,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 12.0,
     },
     ['29'] = {
@@ -1273,10 +1287,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 12.0,
     },
     ['30'] = {
@@ -1307,10 +1321,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 500},
         },
-        sell = { receive = 250 }, -- 500 / 2 = 250 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 375 },
+        tax = 50,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 52000,
         actionsRange = 15.0,
     },
     ['31'] = {
@@ -1333,10 +1347,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 10.0,
     },
     ['32'] = {
@@ -1359,10 +1373,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['33'] = {
@@ -1385,10 +1399,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 150},
         },
-        sell = { receive = 75 }, 
-        tax = 25,
+        sell = { receive = 112 },
+        tax = 15,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 50000,
         actionsRange = 7.0,
     },
     ['34'] = {
@@ -1418,10 +1432,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['35'] = {
@@ -1444,10 +1458,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['36'] = {
@@ -1471,10 +1485,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 350},
         },
-        sell = { receive = 175 }, -- 350 / 2 = 175 = - 50% of default price.
-        tax = 25,
+        sell = { receive = 262 },
+        tax = 35,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 15.0,
     },
     ['37'] = {
@@ -1621,10 +1635,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 6500},
         },
-        sell = { receive = 75 }, 
-        tax = 55,
+        sell = { receive = 4875 },
+        tax = 650,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 82000,
         actionsRange = 7.0,
     },
     ['38'] = {
@@ -1797,10 +1811,10 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 7000},
         },
-        sell = { receive = 175 },
-        tax = 25,
+        sell = { receive = 5250 },
+        tax = 700,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 85000,
         actionsRange = 15.0,
     },
     ['39'] = {
@@ -1825,14 +1839,104 @@ Config.Properties = {
         purchaseMethods = {
             dollars = { cost = 250},
         },
-        sell = { receive = 125 },
+        sell = { receive = 187 },
         tax = 25,
         ledgerLimit = 5000,
-        defaultStorageWeight = 1000000, -- = 1000 Kg
+        defaultStorageWeight = 51000,
         actionsRange = 20.0,
+    },
+    ['40'] = {
+        Locations = {
+            PrimaryEntrance = vector4(1449.2560, -1575.6404, 72.0266, 62.8222), 
+            SecondaryExit   = vector4(1460.5464, -1579.9209, 71.9519, 218.9297),
+            MenuActions     = vector3(1452.9124, -1580.8986, 72.0461),
+            ActionDistance  = 1.8, -- Don´t touch
+        },
+        hasTeleportationEntrance = false,
+        doors = { 
+
+            {
+                [1] = { 
+                    objCoords = vector3(1450.224976, -1575.405640, 71.016129), 
+                    objYaw = 240.189362,
+                },
+            },
+            {
+                [1] = { 
+                    objCoords = vector3(1460.154663, -1579.304443, 71.012955), 
+                    objYaw = 240.513245,
+                },
+            },
+        },
+        purchaseMethods = {
+            dollars = { cost = 3000},
+        },
+        sell = { receive = 2250 },
+        tax = 300,
+        ledgerLimit = 5000,
+        defaultStorageWeight = 65000,
+        actionsRange = 30.0,
+    },
+    ['41'] = {
+        Locations = {
+            PrimaryEntrance = vector4(1778.6600, 461.5905, 113.0593, 104.7083), 
+            SecondaryExit   = vector4(1789.3347, 464.3284, 113.0593, 282.3117),
+            MenuActions     = vector3(1783.3259, 459.5945, 113.0678),
+            ActionDistance  = 1.8, -- Don´t touch
+        },
+        hasTeleportationEntrance = false,
+        doors = { 
+
+            {
+                [1] = { 
+                    objCoords = vector3(1779.500000, 461.013306, 112.034683), 
+                    objYaw = 104.913391,
+                },
+            },
+            {
+                [1] = { 
+                    objCoords = vector3(1789.132324, 463.613953, 112.034683), 
+                    objYaw = 105.000046,
+                },
+            },
+        },
+        purchaseMethods = {
+            dollars = { cost = 1500},
+        },
+        sell = { receive = 1125 },
+        tax = 150,
+        ledgerLimit = 5000,
+        defaultStorageWeight = 57000,
+        actionsRange = 30.0,
     },
     
 }
+
+-- Build the active property table from the whitelist. Keeping this filter here means
+-- every server and client feature automatically uses the same allowed properties.
+do
+    local allProperties = Config.Properties
+    local allowedProperties = {}
+    Config.Properties = {}
+    Config.DisabledProperties = {}
+
+    for _, propertyId in ipairs(Config.AllowProperties or {}) do
+        local propertyName = tostring(propertyId)
+        allowedProperties[propertyName] = true
+
+        if not allProperties[propertyName] and Config.Debug then
+            print(('[rs_housing] Config.AllowProperties contains unknown property ID: %s'):format(propertyName))
+        end
+    end
+
+    for propertyName, property in pairs(allProperties) do
+        if allowedProperties[propertyName] then
+            Config.Properties[propertyName] = property
+        else
+            Config.DisabledProperties[propertyName] = property
+        end
+    end
+end
 
 --[[-------------------------------------------------------
  Webhooks

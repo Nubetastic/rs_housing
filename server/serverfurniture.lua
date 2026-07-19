@@ -27,7 +27,13 @@ local function GetPlayer(src)
     return Player
 end
 
+local function IsAllowedProperty(propname)
+    return type(propname) == 'string' and Config.Properties[propname] ~= nil
+end
+
 local function GetFurniture(propname, cb)
+    if not IsAllowedProperty(propname) then cb({}) return end
+
     exports.oxmysql:query(
         'SELECT furniture FROM properties WHERE name = ?',
         { propname },
@@ -52,7 +58,33 @@ local function GenerateId()
     return tostring(os.time()) .. tostring(math.random(10000, 99999))
 end
 
+local function GetConfiguredFurniture(furnitem, furniname)
+    for _, items in pairs(Config.furniture or {}) do
+        local furniture = items[furniname]
+        if furniture and furniture.hash == furnitem then
+            return furniture
+        end
+    end
+
+    return nil
+end
+
+local function IsWithinPropertyRange(propname, x, y, z)
+    local property = Config.Properties[propname]
+    local center = property and property.Locations and property.Locations.MenuActions
+    local range = property and tonumber(property.actionsRange)
+
+    if not center or not range then return false end
+
+    local dx = x - center.x
+    local dy = y - center.y
+    local dz = z - center.z
+    return math.sqrt((dx * dx) + (dy * dy) + (dz * dz)) <= range
+end
+
 local function IsAuthorized(src, propname, cb)
+    if not IsAllowedProperty(propname) then cb(false) return end
+
     local Player = GetPlayer(src)
     if not Player then cb(false) return end
 
@@ -147,6 +179,19 @@ AddEventHandler('rs_furniture:server:buy', function(propname, furnitem, furninam
     if type(px)        ~= 'number' or type(py) ~= 'number'
         or type(pz)    ~= 'number' or type(ph) ~= 'number' then return end
     if type(furniname) ~= 'string'                         then return end
+
+    local configuredFurniture = GetConfiguredFurniture(furnitem, furniname)
+    if not configuredFurniture then
+        notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_NOT_FOUND'])
+        return
+    end
+
+    if not IsWithinPropertyRange(propname, px, py, pz) then
+        notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_TOO_FAR'])
+        return
+    end
+
+    cost = configuredFurniture.cost
 
     IsAuthorized(src, propname, function(auth)
         if not auth then
