@@ -87,16 +87,16 @@ Config.PropertyBlips = {
 
 Config.TaxRepoSystem = {
     -- Enables or disables the system
-    Enabled = false,
-
+    Enabled = true,
+    DefaultBank = 'bank',
     -- MONTHLY REPO
-    Monthly = false,          -- true = activate monthly repo
+    Monthly = true,          -- true = activate monthly repo
     Day     = 28,             -- day of the month
     Hour    = 21,             -- hour
     Minute  = 30,             -- minute
 
     -- WEEKLY REPO
-    Weekly = true,                  -- true = activate weekly repo
+    Weekly = false,                  -- true = activate weekly repo
     WeekDays = { 7, 17, 21 ,28  },  -- days of the week
     Hour     = 21,                  -- hour       
     Minute   = 30,                  -- minute

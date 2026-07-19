@@ -120,6 +120,93 @@ function GetProperties()
     return Properties
 end
 
+local function TransferNormalLedgerToBank(citizenid, amount, reason)
+    amount = tonumber(amount) or 0
+    if amount <= 0 then return true end
+    if not citizenid then return false, 'missing citizen id' end
+
+    local Player = RSGCore.Functions.GetPlayerByCitizenId(citizenid)
+    local isOffline = false
+
+    if not Player then
+        Player = RSGCore.Functions.GetOfflinePlayerByCitizenId(citizenid)
+        isOffline = true
+    end
+
+    if not Player then return false, 'player not found' end
+
+    local bankType = (Config.TaxRepoSystem and Config.TaxRepoSystem.DefaultBank) or 'bank'
+    local success = Player.Functions.AddMoney(
+        bankType,
+        amount,
+        reason or 'rs_housing-normal-ledger-refund'
+    )
+
+    if not success then return false, ('unable to add money to %s'):format(bankType) end
+
+    if isOffline then
+        Player.Functions.Save()
+    end
+
+    return true
+end
+
+local function IsPlayerWithinPropertyActions(property, playerSource)
+    local center = property.Locations and property.Locations.MenuActions
+    local ped = GetPlayerPed(playerSource)
+    if not center or not ped or ped <= 0 then return false end
+
+    local coords = GetEntityCoords(ped)
+    local range = tonumber(property.actionsRange) or 15.0
+    return #(coords - vector3(center.x, center.y, center.z)) <= range
+end
+
+local function GetNextTaxDueDate()
+    if not Config.TaxRepoSystem or not Config.TaxRepoSystem.Enabled then
+        return 'Taxes disabled'
+    end
+
+    local now = os.time()
+    local current = os.date('*t', now)
+    local candidates = {}
+
+    local function AddCandidate(year, month, day)
+        local candidate = os.time({
+            year = year,
+            month = month,
+            day = day,
+            hour = Config.TaxRepoSystem.Hour or 0,
+            min = Config.TaxRepoSystem.Minute or 0,
+            sec = 0
+        })
+        if candidate and candidate >= now then
+            candidates[#candidates + 1] = candidate
+        end
+    end
+
+    if Config.TaxRepoSystem.Monthly then
+        AddCandidate(current.year, current.month, Config.TaxRepoSystem.Day)
+        AddCandidate(current.year, current.month + 1, Config.TaxRepoSystem.Day)
+    end
+
+    if Config.TaxRepoSystem.Weekly then
+        for _, day in ipairs(Config.TaxRepoSystem.WeekDays or {}) do
+            AddCandidate(current.year, current.month, day)
+            AddCandidate(current.year, current.month + 1, day)
+        end
+    end
+
+    table.sort(candidates)
+    return candidates[1] and os.date('%Y-%m-%d %H:%M', candidates[1]) or 'Not scheduled'
+end
+
+RegisterServerEvent('rs_housing:server:requestTaxDueDate')
+AddEventHandler('rs_housing:server:requestTaxDueDate', function(propertyId)
+    local _source = source
+    if not Properties[propertyId] then return end
+    TriggerClientEvent('rs_housing:client:taxDueDate', _source, propertyId, GetNextTaxDueDate())
+end)
+
 AddEventHandler('onResourceStart', function(resourceName)
     if GetCurrentResourceName() ~= resourceName then return end
     Wait(Config.StartQueryDelay)
@@ -279,7 +366,28 @@ AddEventHandler("rs_housing:server:sell", function(propertyId)
 
     if not PlayerData then return end
 
+    local property = Properties[propertyId]
+    if property.citizenid ~= PlayerData.citizenid then
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+
     local steamName = PlayerData.steamName
+    local normalLedger = tonumber(property.ledgerhome) or 0
+
+    local refunded, refundError = TransferNormalLedgerToBank(
+        property.citizenid,
+        normalLedger,
+        ('rs_housing-property-%s-sold'):format(propertyId)
+    )
+    if not refunded then
+        print(('[rs_housing] Normal ledger refund failed for property %s: %s'):format(
+            propertyId,
+            refundError or 'unknown error'
+        ))
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['NORMAL_LEDGER_REFUND_FAILED'])
+        return
+    end
 
     Properties[propertyId].citizenid  = nil
     Properties[propertyId].duration   = 0
@@ -287,18 +395,20 @@ AddEventHandler("rs_housing:server:sell", function(propertyId)
     Properties[propertyId].owned      = 0
     Properties[propertyId].keyholders = {}
     Properties[propertyId].ledger     = 0
+    Properties[propertyId].ledgerhome = 0
 
     local Parameters = {
         ['name']       = propertyId,
         ['citizenid']  = nil,
         ['keyholders'] = "[]",
         ['ledger']     = Properties[propertyId].ledger,
+        ['ledgerhome'] = 0,
         ['duration']   = 0,
         ['paid']       = 0,
         ['owned']      = 0,
     }
 
-    exports.ghmattimysql:execute("UPDATE `properties` SET `citizenid` = @citizenid, `keyholders` = @keyholders, `ledger` = @ledger, `duration` = @duration, `paid` = @paid, `owned` = @owned WHERE name = @name", Parameters)
+    exports.ghmattimysql:execute("UPDATE `properties` SET `citizenid` = @citizenid, `keyholders` = @keyholders, `ledger` = @ledger, `ledgerhome` = @ledgerhome, `duration` = @duration, `paid` = @paid, `owned` = @owned WHERE name = @name", Parameters)
 
     TriggerClientEvent("rs_housing:client:updateProperty", -1, propertyId, 'SOLD')
 
@@ -314,6 +424,14 @@ AddEventHandler("rs_housing:server:sell", function(propertyId)
         notiMainSuccess(_source, Locales['HOUSING_NOTI'], string.format(Locales['SOLD_PROPERTY_RECEIVED_DOLLARS'], receiveAmount))
     else
         notiMainSuccess(_source, Locales['HOUSING_NOTI'], Locales['SOLD_PROPERTY'])
+    end
+
+    if normalLedger > 0 then
+        notiMainSuccess(
+            _source,
+            Locales['HOUSING_NOTI'],
+            string.format(Locales['NORMAL_LEDGER_REFUNDED'], normalLedger)
+        )
     end
 
     local webhookData = Config.Webhooking['SOLD']
@@ -332,6 +450,9 @@ AddEventHandler('rs_housing:server:updateAccountLedgerById', function(propertyId
     if not xPlayer then return end
     if Properties[propertyId] == nil then return end
 
+    amount = tonumber(amount)
+    if transactionType ~= 'DEPOSIT' or not amount or amount <= 0 then return end
+
     local propertyData = Properties[propertyId]
     local currentMoney = xPlayer.PlayerData.money['cash']
 
@@ -340,11 +461,9 @@ AddEventHandler('rs_housing:server:updateAccountLedgerById', function(propertyId
         return
     end
 
-    if transactionType == 'DEPOSIT' and propertyData.tax ~= nil then
-        if (propertyData.ledger + amount) > propertyData.tax then
-            notiMainError(_source, Locales['HOUSING_NOTI'], Locales['MONEY_LEDGER_DEPOSIT_LIMIT'])
-            return
-        end
+    if propertyData.tax and propertyData.tax > 0 and amount % propertyData.tax ~= 0 then
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['INVALID_QUANTITY'])
+        return
     end
 
     if transactionType == 'DEPOSIT' then
@@ -352,6 +471,14 @@ AddEventHandler('rs_housing:server:updateAccountLedgerById', function(propertyId
         Properties[propertyId].ledger = Properties[propertyId].ledger + amount
         notiMainSuccess(_source, Locales['HOUSING_NOTI'], string.format(Locales['LEDGER_DEPOSITED_ACCOUNT_MONEY'], amount))
     end
+
+    exports.ghmattimysql:execute(
+        "UPDATE properties SET ledger = @ledger WHERE name = @property",
+        {
+            ["@property"] = propertyId,
+            ["@ledger"] = Properties[propertyId].ledger
+        }
+    )
 
     Wait(500)
     TriggerClientEvent("rs_housing:client:updateProperty", _source, propertyId, 'LEDGER', { Properties[propertyId].ledger })
@@ -375,6 +502,19 @@ AddEventHandler("rs_housing:server:transferOwnedProperty", function(propertyId, 
     targetSource = tonumber(targetSource)
 
     if Properties[propertyId] == nil then return end
+    if not targetSource then return end
+
+    local property = Properties[propertyId]
+    local sourcePlayerData = GetPlayerData(_source)
+    if not sourcePlayerData or property.citizenid ~= sourcePlayerData.citizenid then
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+    if not IsPlayerWithinPropertyActions(property, _source)
+        or not IsPlayerWithinPropertyActions(property, targetSource) then
+        notiMainError(_source, Locales['HOUSING_NOTI'], Locales['PLAYER_NOT_FOUND'])
+        return
+    end
 
     local tPlayerData = GetPlayerData(targetSource)
     if not tPlayerData then return end
@@ -578,25 +718,57 @@ if Config.TaxRepoSystem and Config.TaxRepoSystem.Enabled then
 
                 if property.ledger < property.tax then
 
+                    local ownerCitizenId = property.citizenid
+                    local normalLedger = tonumber(property.ledgerhome) or 0
+                    local refunded, refundError = TransferNormalLedgerToBank(
+                        ownerCitizenId,
+                        normalLedger,
+                        ('rs_housing-property-%s-repossessed'):format(id)
+                    )
+
+                    if not refunded then
+                        print(('[rs_housing] Repossession skipped for property %s; normal ledger refund failed: %s'):format(
+                            id,
+                            refundError or 'unknown error'
+                        ))
+                        goto continue
+                    end
+
                     Properties[id].citizenid  = nil
                     Properties[id].owned      = 0
                     Properties[id].keyholders = {}
                     Properties[id].ledger     = 0
+                    Properties[id].ledgerhome = 0
+                    Properties[id].duration   = 0
+                    Properties[id].paid       = 0
 
                     local Parameters = {
                         ['name']       = id,
                         ['citizenid']  = nil,
                         ['keyholders'] = "[]",
                         ['ledger']     = 0,
+                        ['ledgerhome'] = 0,
                         ['duration']   = 0,
+                        ['paid']       = 0,
                         ['owned']      = 0,
                     }
 
                     exports.ghmattimysql:execute(
                         "UPDATE `properties` SET `citizenid` = @citizenid, `keyholders` = @keyholders,"
-                        .. " `ledger` = @ledger, `duration` = @duration, `owned` = @owned WHERE name = @name",
+                        .. " `ledger` = @ledger, `ledgerhome` = @ledgerhome, `duration` = @duration, `paid` = @paid, `owned` = @owned WHERE name = @name",
                         Parameters
                     )
+
+                    if normalLedger > 0 then
+                        local owner = RSGCore.Functions.GetPlayerByCitizenId(ownerCitizenId)
+                        if owner and owner.PlayerData.source then
+                            notiMainSuccess(
+                                owner.PlayerData.source,
+                                Locales['HOUSING_NOTI'],
+                                string.format(Locales['NORMAL_LEDGER_REFUNDED'], normalLedger)
+                            )
+                        end
+                    end
 
                     TriggerClientEvent("rs_housing:client:updateProperty", -1, id, 'SOLD')
 
@@ -611,6 +783,14 @@ if Config.TaxRepoSystem and Config.TaxRepoSystem.Enabled then
                     exports.ghmattimysql:execute(
                         "UPDATE `properties` SET `ledger` = @ledger WHERE name = @name",
                         { ['name'] = id, ['ledger'] = Properties[id].ledger }
+                    )
+
+                    TriggerClientEvent(
+                        "rs_housing:client:updateProperty",
+                        -1,
+                        id,
+                        'LEDGER',
+                        { Properties[id].ledger }
                     )
                 end
 

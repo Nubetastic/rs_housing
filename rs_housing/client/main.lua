@@ -209,6 +209,7 @@ AddEventHandler("rs_housing:client:updateProperty", function(propertyId, actionT
     PlayerData.Properties[propertyId].owned      = 0
     PlayerData.Properties[propertyId].keyholders = {}
     PlayerData.Properties[propertyId].ledger = 0
+    PlayerData.Properties[propertyId].ledgerhome = 0
 
     RemoveBlip(PlayerData.Properties[propertyId].blip)
 

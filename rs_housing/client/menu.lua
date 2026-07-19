@@ -1,4 +1,5 @@
 local MenuData = {}
+local RSGCore = exports['rsg-core']:GetCoreObject()
 
 TriggerEvent("rsg-menubase:getData", function(call)
     MenuData = call
@@ -34,14 +35,16 @@ function OpenMenuManagement(propertyId)
         -- Saltamos MENU_LEDGER porque lo controlaremos manualmente
         if option.Type ~= "MENU_LEDGER" and option.Enabled then
 
+            local label = Locales[option.Type]
             local description = Locales[option.Type .. "_DESCRIPTION"]
 
             if option.Type == 'MENU_SELL' then
+                label = string.format(Locales['MENU_SELL_WITH_PRICE'], property.sell.receive)
                 description = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive)
             end
 
             table.insert(options, {
-                label = Locales[option.Type],
+                label = label,
                 value = option.Type,
                 desc  = description
             })
@@ -854,6 +857,659 @@ function OpenMenuLedgerHome()
     end)
 
 end
+
+-- Housing NUI ---------------------------------------------------------------
+-- The legacy menu functions above are retained for compatibility with any
+-- external calls. These definitions replace the property-facing flows with
+-- the same NUI shell used by the decoration menu.
+
+local HousingView = nil
+local HousingSelectedKeyholder = nil
+local HousingTaxDueDates = {}
+local HousingTransferPlayers = {}
+local RequestNearbyHousingPlayers
+
+local function NotifyHousingError(message)
+    lib.notify({
+        title = Locales['HOUSING_NOTI'],
+        description = message,
+        type = 'error',
+        duration = 3000,
+        position = 'top'
+    })
+end
+
+local function ShowHousingNui(payload)
+    payload.action = 'housing'
+    payload.show = true
+    HousingView = payload.view
+    SetNuiFocus(true, true)
+    SetNuiFocusKeepInput(false)
+    SendNUIMessage(payload)
+end
+
+local function CloseHousingNui(resetProperty)
+    HousingView = nil
+    HousingSelectedKeyholder = nil
+    SetNuiFocus(false, false)
+    SetNuiFocusKeepInput(false)
+    SendNUIMessage({ action = 'close', show = false })
+
+    if resetProperty then
+        local PlayerData = GetPlayerData()
+        PlayerData.IsInMenu = false
+        CurrentProperty = nil
+        TaskStandStill(PlayerPedId(), 1)
+    end
+end
+
+local function NextTaxDueDate(propertyId)
+    if not Config.TaxRepoSystem or not Config.TaxRepoSystem.Enabled then
+        return 'Taxes disabled'
+    end
+
+    local cached = HousingTaxDueDates[propertyId]
+    local now = GetGameTimer()
+    if cached and cached.value and (now - cached.receivedAt) < 60000 then
+        return cached.value
+    end
+
+    if not cached or not cached.pending then
+        HousingTaxDueDates[propertyId] = {
+            value = cached and cached.value or nil,
+            receivedAt = cached and cached.receivedAt or 0,
+            pending = true
+        }
+        TriggerServerEvent('rs_housing:server:requestTaxDueDate', propertyId)
+    end
+
+    return cached and cached.value or 'Loading...'
+end
+
+local function OpenHousingLedger()
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    local price = property.purchaseMethods
+        and property.purchaseMethods.dollars
+        and tonumber(property.purchaseMethods.dollars.cost) or 0
+    local tax = tonumber(property.tax) or 0
+    local taxFunds = tonumber(property.ledger) or 0
+    local normalFunds = tonumber(property.ledgerhome) or 0
+    local taxRate = price > 0 and ((tax / price) * 100) or 0
+    local fundedPeriods = tax > 0 and math.floor(taxFunds / tax) or 0
+    local fundedUnit = 'periods'
+    if Config.TaxRepoSystem and Config.TaxRepoSystem.Monthly then
+        fundedUnit = fundedPeriods == 1 and 'month' or 'months'
+    elseif Config.TaxRepoSystem and Config.TaxRepoSystem.Weekly then
+        fundedUnit = fundedPeriods == 1 and 'week' or 'weeks'
+    end
+    local taxAtRisk = Config.TaxRepoSystem
+        and Config.TaxRepoSystem.Enabled
+        and tax > 0
+        and taxFunds < tax
+
+    ShowHousingNui({
+        view = 'ledger',
+        title = 'Money Ledger',
+        subtitle = ('House #%s'):format(CurrentProperty),
+        property = {
+            house = tostring(CurrentProperty),
+            taxAmount = tax,
+            taxRate = ('%.2f%%'):format(taxRate),
+            taxDueDate = NextTaxDueDate(CurrentProperty),
+            taxFunds = taxFunds,
+            taxAtRisk = taxAtRisk,
+            taxFunded = ('%d %s'):format(fundedPeriods, fundedUnit),
+            normalFunds = normalFunds
+        },
+        labels = {
+            house = 'House #',
+            taxAmount = 'Tax Amount',
+            taxRate = 'Tax Rate',
+            taxDueDate = 'Tax Due Date',
+            taxFunds = 'Tax Funds',
+            taxFunded = 'Tax Funded For',
+            normalFunds = 'Ledger Balance',
+            deposit = Locales['MENU_LEDGER_DEPOSIT_TITLE'],
+            withdraw = Locales['MENU_LEDGER_WITHDRAW_TITLE'],
+            payTax = 'Pay Tax'
+        }
+    })
+end
+
+local function GetCurrentPlayerCash()
+    local corePlayerData = RSGCore.Functions.GetPlayerData()
+    return corePlayerData and corePlayerData.money and tonumber(corePlayerData.money.cash) or 0
+end
+
+local function OpenHousingNormalTransaction(actionType)
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    ShowHousingNui({
+        view = 'ledger_transaction',
+        title = actionType == 'DEPOSIT' and 'Deposit Funds' or 'Withdraw Funds',
+        subtitle = ('House #%s · Money Ledger'):format(CurrentProperty),
+        transaction = {
+            action = actionType,
+            currentAmount = tonumber(property.ledgerhome) or 0,
+            playerFunds = GetCurrentPlayerCash(),
+            maximum = actionType == 'DEPOSIT'
+                and GetCurrentPlayerCash()
+                or (tonumber(property.ledgerhome) or 0)
+        },
+        labels = {
+            currentAmount = 'Current Amount',
+            playerFunds = 'Player Cash',
+            amount = 'Amount',
+            submit = actionType == 'DEPOSIT' and 'Deposit' or 'Withdraw'
+        }
+    })
+end
+
+local function OpenHousingTaxPayment()
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    local price = property.purchaseMethods
+        and property.purchaseMethods.dollars
+        and tonumber(property.purchaseMethods.dollars.cost) or 0
+    local tax = tonumber(property.tax) or 0
+    local taxFunds = tonumber(property.ledger) or 0
+    local taxRate = price > 0 and ((tax / price) * 100) or 0
+
+    ShowHousingNui({
+        view = 'tax_payment',
+        title = 'Pay Property Tax',
+        subtitle = ('House #%s · Payments increase by one tax period'):format(CurrentProperty),
+        taxPayment = {
+            taxAmount = tax,
+            taxRate = ('%.2f%%'):format(taxRate),
+            taxDueDate = NextTaxDueDate(CurrentProperty),
+            currentFunds = taxFunds,
+            playerFunds = GetCurrentPlayerCash()
+        },
+        labels = {
+            taxAmount = 'Tax Amount',
+            taxRate = 'Tax Rate',
+            taxDueDate = 'Tax Due Date',
+            currentFunds = 'Current Tax Funds',
+            playerFunds = 'Player Cash',
+            amount = 'Tax Payment',
+            submit = 'Deposit Tax'
+        }
+    })
+end
+
+local function OpenHousingTransfer(nearbyPlayers)
+    HousingTransferPlayers = nearbyPlayers or {}
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    ShowHousingNui({
+        view = 'transfer',
+        title = 'Transfer Property',
+        subtitle = ('House #%s · Select a player currently on the property'):format(CurrentProperty),
+        transfer = {
+            range = tonumber(property.actionsRange) or 15.0,
+            players = HousingTransferPlayers,
+            loading = nearbyPlayers == nil
+        },
+        labels = {
+            nearbyPlayers = 'Players On Property',
+            amount = 'Player Server ID',
+            submit = 'Transfer Property'
+        }
+    })
+
+    if nearbyPlayers == nil then
+        RequestNearbyHousingPlayers()
+    end
+end
+
+RequestNearbyHousingPlayers = function()
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    local serverIds = {}
+    local range = tonumber(property.actionsRange) or 15.0
+    local center = property.Locations and property.Locations.MenuActions
+    if not center then return end
+
+    for _, player in ipairs(GetActivePlayers()) do
+        if player ~= PlayerId() then
+            local ped = GetPlayerPed(player)
+            local coords = GetEntityCoords(ped)
+            local distance = #(coords - vector3(center.x, center.y, center.z))
+            if distance <= range then
+                serverIds[#serverIds + 1] = GetPlayerServerId(player)
+            end
+        end
+    end
+
+    TriggerServerEvent('rs_housing:server:requestNearbyPropertyPlayers', CurrentProperty, serverIds)
+end
+
+local function OpenHousingKeyholders(nearbyPlayers)
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    local keyholders = {}
+    local existing = {}
+    for citizenid, keyholder in pairs(property.keyholders or {}) do
+        existing[citizenid] = true
+        keyholders[#keyholders + 1] = {
+            name = keyholder.username or citizenid,
+            id = citizenid,
+            citizenid = citizenid
+        }
+    end
+    table.sort(keyholders, function(a, b) return a.name:lower() < b.name:lower() end)
+
+    local nonKeyholders = {}
+    for _, player in ipairs(nearbyPlayers or {}) do
+        if player.citizenid ~= PlayerData.CitizenId and not existing[player.citizenid] then
+            nonKeyholders[#nonKeyholders + 1] = player
+        end
+    end
+    table.sort(nonKeyholders, function(a, b) return a.name:lower() < b.name:lower() end)
+
+    ShowHousingNui({
+        view = 'keyholders',
+        title = 'Property Keyholders',
+        subtitle = ('House #%s · Players within %.1f meters'):format(
+            CurrentProperty,
+            tonumber(property.actionsRange) or 15.0
+        ),
+        keyholders = keyholders,
+        nonKeyholders = nonKeyholders,
+        maxKeyholders = Config.MaxHouseKeyHolders
+    })
+end
+
+local function RefreshHousingKeyholders()
+    OpenHousingKeyholders({})
+    RequestNearbyHousingPlayers()
+end
+
+local PermissionOptions = {
+    { key = 'ledger_deposit', locale = 'ledger_deposit' },
+    { key = 'ledgerhome_deposit', locale = 'ledgerhome_deposit' },
+    { key = 'ledgerhome_withdraw', locale = 'ledgerhome_withdraw' },
+    { key = 'keyholders', locale = 'keyholders_management' },
+    { key = 'set_wardrobe', locale = 'set_wardrobe' },
+    { key = 'set_storage', locale = 'set_storage' },
+    { key = 'storage_access', locale = 'storage_access' },
+    { key = 'place_furniture', locale = 'place_furniture' }
+}
+
+local function OpenHousingPermissions(citizenid, username)
+    HousingSelectedKeyholder = { citizenid = citizenid, username = username }
+    local items = {}
+    for _, permission in ipairs(PermissionOptions) do
+        items[#items + 1] = {
+            value = permission.key,
+            label = Locales[permission.locale] or permission.locale,
+            description = GetPermissionDescription(
+                HasPermissionByName(CurrentProperty, permission.key, citizenid)
+            )
+        }
+    end
+
+    ShowHousingNui({
+        view = 'permissions',
+        title = username,
+        subtitle = 'Select a permission to toggle it',
+        items = items
+    })
+end
+
+function OpenMenuManagement(propertyId)
+    local PlayerData = GetPlayerData()
+    if CurrentProperty == nil then CurrentProperty = propertyId end
+    if not CurrentProperty then return end
+
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    MenuData.CloseAll()
+    PlayerData.IsInMenu = true
+    TaskStandStill(PlayerPedId(), -1)
+
+    local items = {}
+    for _, option in pairs(Config.ManagementMenu) do
+        if option.Enabled then
+            local label = Locales[option.Type]
+            local description = Locales[option.Type .. '_DESCRIPTION'] or ''
+            if option.Type == 'MENU_SELL' then
+                label = string.format(Locales['MENU_SELL_WITH_PRICE'], property.sell.receive)
+                description = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive)
+            end
+            items[#items + 1] = { value = option.Type, label = label, description = description }
+        end
+    end
+
+    items[#items + 1] = {
+        value = 'MENU_FURNITURE',
+        label = Locales['MENU_FURNITURE'],
+        description = Locales['MENU_FURNITURE_DESCRIPTION'] or ''
+    }
+    items[#items + 1] = {
+        value = 'MENU_EXIT',
+        label = Locales['MENU_EXIT'],
+        description = ''
+    }
+
+    ShowHousingNui({
+        view = 'management',
+        title = ('House #%s'):format(CurrentProperty),
+        subtitle = 'Property Management',
+        items = items
+    })
+end
+
+-- Preserve the public function names used elsewhere in the resource.
+function OpenMenuKeyholders()
+    RefreshHousingKeyholders()
+end
+
+function OpenMenuLedgerHome()
+    OpenHousingLedger()
+end
+
+RegisterNetEvent('rs_housing:client:nearbyPropertyPlayers', function(propertyId, players)
+    if HousingView == 'keyholders' and tostring(propertyId) == tostring(CurrentProperty) then
+        OpenHousingKeyholders(players)
+    elseif HousingView == 'transfer' and tostring(propertyId) == tostring(CurrentProperty) then
+        OpenHousingTransfer(players)
+    end
+end)
+
+RegisterNetEvent('rs_housing:client:taxDueDate', function(propertyId, dueDate)
+    HousingTaxDueDates[propertyId] = {
+        value = dueDate or 'Not scheduled',
+        receivedAt = GetGameTimer(),
+        pending = false
+    }
+
+    if tostring(propertyId) == tostring(CurrentProperty) then
+        if HousingView == 'ledger' then
+            OpenHousingLedger()
+        elseif HousingView == 'tax_payment' then
+            OpenHousingTaxPayment()
+        end
+    end
+end)
+
+RegisterNetEvent('rs_housing:client:updateProperty', function(propertyId, actionType)
+    if tostring(propertyId) ~= tostring(CurrentProperty) then return end
+
+    if HousingView == 'ledger' and (actionType == 'LEDGER' or actionType == 'LEDGERHOME') then
+        SetTimeout(100, OpenHousingLedger)
+    elseif HousingView == 'keyholders'
+        and (actionType == 'ADDED_KEYHOLDER' or actionType == 'REMOVED_KEYHOLDER') then
+        SetTimeout(100, RefreshHousingKeyholders)
+    elseif HousingView == 'permissions' and actionType == 'UPDATE_KEYHOLDER_PERMISSION'
+        and HousingSelectedKeyholder then
+        local selected = HousingSelectedKeyholder
+        SetTimeout(100, function()
+            OpenHousingPermissions(selected.citizenid, selected.username)
+        end)
+    end
+end)
+
+RegisterNUICallback('housingSelect', function(data, cb)
+    cb('ok')
+    local value = data and data.value
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not value or not property then return end
+
+    if HousingView == 'permissions' and HousingSelectedKeyholder then
+        TriggerServerEvent(
+            'rs_housing:server:onMembersPermissionUpdate',
+            CurrentProperty,
+            HousingSelectedKeyholder.citizenid,
+            value
+        )
+        return
+    end
+
+    if HousingView == 'sell_confirm' then
+        if value == 'confirm_sell' then
+            TriggerServerEvent('rs_housing:server:sell', CurrentProperty)
+            CloseHousingNui(true)
+        else
+            OpenMenuManagement(CurrentProperty)
+        end
+        return
+    end
+
+    if value == 'MENU_EXIT' then
+        CloseHousingNui(true)
+    elseif value == 'MENU_WARDROBE_LOCATION' or value == 'MENU_STORAGE_LOCATION' then
+        local permission = value == 'MENU_WARDROBE_LOCATION' and 'set_wardrobe' or 'set_storage'
+        if HasPermissionByName(CurrentProperty, permission, PlayerData.CitizenId) == 0 then
+            NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+            return
+        end
+        CloseHousingNui(false)
+        LocationType = value
+        TaskStandStill(PlayerPedId(), 1)
+    elseif value == 'MENU_LEDGER_HOME' then
+        OpenHousingLedger()
+    elseif value == 'MENU_SET_KEYHOLDERS' then
+        if HasPermissionByName(CurrentProperty, 'keyholders', PlayerData.CitizenId) == 0 then
+            NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+            return
+        end
+        RefreshHousingKeyholders()
+    elseif value == 'MENU_TRANSFER' then
+        if property.citizenid ~= PlayerData.CitizenId then
+            NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+            return
+        end
+        OpenHousingTransfer()
+    elseif value == 'MENU_SELL' then
+        if property.citizenid ~= PlayerData.CitizenId then
+            NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+            return
+        end
+        ShowHousingNui({
+            view = 'sell_confirm',
+            title = 'Sell House',
+            subtitle = string.format(Locales['MENU_SELL_DESCRIPTION_DOLLARS'], property.sell.receive),
+            items = {
+                { value = 'confirm_sell', label = Locales['MENU_SELL_ACCEPT'], description = Locales['MENU_SELL_ACCEPT_DESCRIPTION'] },
+                { value = 'cancel_sell', label = Locales['MENU_BACK'], description = '' }
+            }
+        })
+    elseif value == 'MENU_FURNITURE' then
+        if HasPermissionByName(CurrentProperty, 'place_furniture', PlayerData.CitizenId) == 0 then
+            NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+            return
+        end
+        local propertyId = CurrentProperty
+        CloseHousingNui(true)
+        TriggerEvent('rs_furniture:open', propertyId)
+    end
+end)
+
+RegisterNUICallback('housingLedgerAction', function(data, cb)
+    cb('ok')
+    local action = data and data.action
+    if HousingView ~= 'ledger'
+        or (action ~= 'DEPOSIT' and action ~= 'WITHDRAW' and action ~= 'PAY_TAX') then return end
+
+    local PlayerData = GetPlayerData()
+    local permission = action == 'DEPOSIT' and 'ledgerhome_deposit'
+        or action == 'WITHDRAW' and 'ledgerhome_withdraw'
+        or 'ledger_deposit'
+    if HasPermissionByName(CurrentProperty, permission, PlayerData.CitizenId) == 0 then
+        NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+
+    if action == 'PAY_TAX' then
+        OpenHousingTaxPayment()
+    else
+        OpenHousingNormalTransaction(action)
+    end
+end)
+
+RegisterNUICallback('housingSubmitLedgerTransaction', function(data, cb)
+    cb('ok')
+    if HousingView ~= 'ledger_transaction' or not data then return end
+
+    local action = data.action
+    local amount = tonumber(data.amount)
+    if (action ~= 'DEPOSIT' and action ~= 'WITHDRAW') or not amount or amount <= 0 then
+        NotifyHousingError(Locales['INVALID_QUANTITY'])
+        return
+    end
+
+    local PlayerData = GetPlayerData()
+    local permission = action == 'DEPOSIT' and 'ledgerhome_deposit' or 'ledgerhome_withdraw'
+    if HasPermissionByName(CurrentProperty, permission, PlayerData.CitizenId) == 0 then
+        NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+
+    TriggerServerEvent('rs_housing:server:updateAccountLedgerHomeById', CurrentProperty, action, amount)
+    OpenHousingLedger()
+end)
+
+RegisterNUICallback('housingSubmitTaxPayment', function(data, cb)
+    cb('ok')
+    if HousingView ~= 'tax_payment' or not data then return end
+
+    local amount = tonumber(data.amount)
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    local tax = property and tonumber(property.tax) or 0
+
+    if not amount or amount <= 0 or tax <= 0 or amount % tax ~= 0 then
+        NotifyHousingError(Locales['INVALID_QUANTITY'])
+        return
+    end
+    if HasPermissionByName(CurrentProperty, 'ledger_deposit', PlayerData.CitizenId) == 0 then
+        NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+
+    TriggerServerEvent('rs_housing:server:updateAccountLedgerById', CurrentProperty, 'DEPOSIT', amount)
+    OpenHousingLedger()
+end)
+
+RegisterNUICallback('housingSubmitTransfer', function(data, cb)
+    cb('ok')
+    if HousingView ~= 'transfer' or not data then return end
+
+    local targetId = tonumber(data.serverId)
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property or property.citizenid ~= PlayerData.CitizenId then
+        NotifyHousingError(Locales['INSUFFICIENT_PERMISSIONS'])
+        return
+    end
+    if not targetId or targetId < 1 then
+        NotifyHousingError(Locales['INVALID_INPUT'])
+        return
+    end
+    if targetId == GetPlayerServerId(PlayerId()) then
+        NotifyHousingError(Locales['CANNOT_TRANSFER_TO_SAME_PERSON'])
+        return
+    end
+
+    local listedPlayer = false
+    for _, nearbyPlayer in ipairs(HousingTransferPlayers) do
+        if targetId == tonumber(nearbyPlayer.serverId) then
+            listedPlayer = true
+            break
+        end
+    end
+
+    if not listedPlayer then
+        NotifyHousingError(Locales['PLAYER_NOT_FOUND'])
+        return
+    end
+
+    local targetStillPresent = false
+    local center = property.Locations and property.Locations.MenuActions
+    local range = tonumber(property.actionsRange) or 15.0
+    if center then
+        for _, targetPlayer in ipairs(GetActivePlayers()) do
+            if targetId == GetPlayerServerId(targetPlayer) then
+                local coords = GetEntityCoords(GetPlayerPed(targetPlayer))
+                targetStillPresent = #(coords - vector3(center.x, center.y, center.z)) <= range
+                break
+            end
+        end
+    end
+
+    if not targetStillPresent then
+        NotifyHousingError(Locales['PLAYER_NOT_FOUND'])
+        return
+    end
+
+    TriggerServerEvent('rs_housing:server:transferOwnedProperty', CurrentProperty, targetId)
+    CloseHousingNui(true)
+end)
+
+RegisterNUICallback('housingKeyholderAction', function(data, cb)
+    cb('ok')
+    if HousingView ~= 'keyholders' or not data then return end
+
+    local PlayerData = GetPlayerData()
+    local property = PlayerData.Properties[CurrentProperty]
+    if not property then return end
+
+    if data.action == 'add' then
+        local count = 0
+        for _ in pairs(property.keyholders or {}) do count = count + 1 end
+        if count >= Config.MaxHouseKeyHolders then
+            NotifyHousingError(Locales['MENU_KEYHOLDERS_REACHED_MAX'])
+            return
+        end
+        TriggerServerEvent('rs_housing:server:addPropertyKeyholder', CurrentProperty, tonumber(data.serverId))
+    elseif data.action == 'remove' then
+        TriggerServerEvent(
+            'rs_housing:server:removePropertyKeyholder',
+            CurrentProperty,
+            data.citizenid,
+            data.name
+        )
+    elseif data.action == 'permissions' then
+        OpenHousingPermissions(data.citizenid, data.name)
+    end
+end)
+
+RegisterNUICallback('housingBack', function(_, cb)
+    cb('ok')
+    if HousingView == 'management' then
+        CloseHousingNui(true)
+    elseif HousingView == 'permissions' then
+        RefreshHousingKeyholders()
+    elseif HousingView == 'ledger_transaction' or HousingView == 'tax_payment' then
+        OpenHousingLedger()
+    elseif HousingView == 'transfer' then
+        OpenMenuManagement(CurrentProperty)
+    else
+        OpenMenuManagement(CurrentProperty)
+    end
+end)
+
+RegisterNUICallback('housingClose', function(_, cb)
+    cb('ok')
+    CloseHousingNui(true)
+end)
 
 Citizen.CreateThread(function()
     while true do

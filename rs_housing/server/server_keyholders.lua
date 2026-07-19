@@ -43,6 +43,68 @@ local function GetPlayerData(source)
   }
 end
 
+local function CanManageKeyholders(property, source)
+    local player = GetPlayerData(source)
+    if not player then return false end
+    if property.citizenid == player.citizenid then return true end
+
+    local keyholder = property.keyholders[player.citizenid]
+    return keyholder
+        and keyholder.permissions
+        and tonumber(keyholder.permissions.keyholders) == 1
+end
+
+local function IsPlayerAtProperty(property, source)
+    local center = property.Locations and property.Locations.MenuActions
+    local ped = GetPlayerPed(source)
+    if not center or not ped or ped <= 0 then return false end
+
+    local coords = GetEntityCoords(ped)
+    local range = tonumber(property.actionsRange) or 15.0
+    return #(coords - vector3(center.x, center.y, center.z)) <= range
+end
+
+local AllowedKeyholderPermissions = {
+    ledger_deposit = true,
+    ledgerhome_deposit = true,
+    ledgerhome_withdraw = true,
+    keyholders = true,
+    set_wardrobe = true,
+    set_storage = true,
+    storage_access = true,
+    place_furniture = true
+}
+
+RegisterServerEvent('rs_housing:server:requestNearbyPropertyPlayers')
+AddEventHandler('rs_housing:server:requestNearbyPropertyPlayers', function(propertyId, serverIds)
+    local _source = source
+    local Properties = GetProperties()
+    local property = Properties[propertyId]
+
+    if not property or type(serverIds) ~= 'table' then return end
+
+    if not CanManageKeyholders(property, _source) or not IsPlayerAtProperty(property, _source) then return end
+
+    local players = {}
+    local seen = {}
+    for _, playerId in ipairs(serverIds) do
+        playerId = tonumber(playerId)
+        if playerId and playerId ~= _source and not seen[playerId] then
+            seen[playerId] = true
+            local player = GetPlayerData(playerId)
+            if player and IsPlayerAtProperty(property, playerId) then
+                players[#players + 1] = {
+                    name = player.firstname .. ' ' .. player.lastname,
+                    serverId = playerId,
+                    citizenid = player.citizenid
+                }
+            end
+        end
+    end
+
+    TriggerClientEvent('rs_housing:client:nearbyPropertyPlayers', _source, propertyId, players)
+end)
+
 RegisterServerEvent("rs_housing:server:addPropertyKeyholder")
 AddEventHandler("rs_housing:server:addPropertyKeyholder", function(propertyId, playerId)
 
@@ -52,6 +114,14 @@ AddEventHandler("rs_housing:server:addPropertyKeyholder", function(propertyId, p
     local Properties = GetProperties()
 
     if not Properties[propertyId] or not _tsource then return end
+
+    local property = Properties[propertyId]
+    if not CanManageKeyholders(property, _source)
+        or not IsPlayerAtProperty(property, _source)
+        or not IsPlayerAtProperty(property, _tsource) then
+        notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['PLAYER_NOT_VALID'])
+        return
+    end
 
     if GetPlayerName(_tsource) == nil then
         notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['PLAYER_NOT_VALID'])
@@ -63,7 +133,6 @@ AddEventHandler("rs_housing:server:addPropertyKeyholder", function(propertyId, p
       return
     end
 
-    local property   = Properties[propertyId]
     local PlayerData = GetPlayerData(_tsource)
 
     if not PlayerData then
@@ -75,6 +144,12 @@ AddEventHandler("rs_housing:server:addPropertyKeyholder", function(propertyId, p
 
     if property.keyholders[citizenid] then
         notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['MENU_KEYHOLDERS_ALREADY_EXISTS'])
+        return
+    end
+
+
+    if GetTableLength(property.keyholders) >= Config.MaxHouseKeyHolders then
+        notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['MENU_KEYHOLDERS_REACHED_MAX'])
         return
     end
 
@@ -122,6 +197,12 @@ AddEventHandler("rs_housing:server:removePropertyKeyholder", function(propertyId
 
   if not Properties[propertyId] then return end
 
+  if not CanManageKeyholders(Properties[propertyId], _source)
+      or not IsPlayerAtProperty(Properties[propertyId], _source) then
+    notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['INSUFFICIENT_PERMISSIONS'])
+    return
+  end
+
   if not Properties[propertyId].keyholders[citizenid] then
     notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['MENU_KEYHOLDERS_DOES_NOT_EXISTS'])
     return
@@ -156,7 +237,13 @@ AddEventHandler('rs_housing:server:onMembersPermissionUpdate', function(property
 
   local Properties = GetProperties()
 
-  if Properties[propertyId] == nil then return end
+  if Properties[propertyId] == nil or not AllowedKeyholderPermissions[permission] then return end
+
+  if not CanManageKeyholders(Properties[propertyId], _source)
+      or not IsPlayerAtProperty(Properties[propertyId], _source) then
+    notiKeyError(_source, Locales['HOUSING_NOTI'], Locales['INSUFFICIENT_PERMISSIONS'])
+    return
+  end
 
   local Property = Properties[propertyId]
 
