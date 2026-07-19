@@ -321,7 +321,9 @@
         let mode = null;
         let items = [];
         let selectedIndex = 0;
-        let cameraHoldTimer = null;
+        let listReorderPaused = false;
+        let pendingLiveItems = null;
+        let listReorderTimer = null;
 
         function post(name, body = {}) {
             return fetch(`https://${GetParentResourceName()}/${name}`, {
@@ -340,6 +342,53 @@
             post('decorationNavigate', { index: selectedIndex + 1 });
         }
 
+        function refreshSelection(notify = true) {
+            const selectedKey = items[selectedIndex] && String(items[selectedIndex].key);
+
+            menuItems.querySelectorAll('.menu-item').forEach(row => {
+                row.classList.toggle('selected', row.dataset.key === selectedKey);
+            });
+
+            const selected = selectedKey
+                ? Array.from(menuItems.querySelectorAll('.menu-item'))
+                    .find(row => row.dataset.key === selectedKey)
+                : null;
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+            if (notify) notifySelection();
+        }
+
+        function createItemRow(item, index) {
+            const row = document.createElement('div');
+            row.className = 'menu-item';
+            row.dataset.key = String(item.key ?? index);
+            row.innerHTML = `
+                <div class="item-label"></div>
+                <div class="item-description"></div>
+            `;
+
+            row.addEventListener('mouseenter', () => {
+                const currentIndex = items.findIndex(entry =>
+                    String(entry.key) === row.dataset.key);
+                if (currentIndex >= 0) setSelected(currentIndex);
+            });
+
+            row.addEventListener('click', () => {
+                const currentIndex = items.findIndex(entry =>
+                    String(entry.key) === row.dataset.key);
+                if (currentIndex < 0) return;
+                setSelected(currentIndex);
+                selectCurrent();
+            });
+
+            return row;
+        }
+
+        function updateItemRow(row, item, index) {
+            row.dataset.key = String(item.key ?? index);
+            row.querySelector('.item-label').textContent = item.label || '';
+            row.querySelector('.item-description').textContent = item.description || '';
+        }
+
         function renderItems(notify = true) {
             menuItems.innerHTML = '';
 
@@ -354,37 +403,90 @@
             selectedIndex = Math.max(0, Math.min(selectedIndex, items.length - 1));
 
             items.forEach((item, index) => {
-                const row = document.createElement('div');
-                row.className = `menu-item${index === selectedIndex ? ' selected' : ''}`;
-                row.innerHTML = `
-                    <div class="item-label"></div>
-                    <div class="item-description"></div>
-                `;
-                row.querySelector('.item-label').textContent = item.label || '';
-                row.querySelector('.item-description').textContent = item.description || '';
-                row.addEventListener('mouseenter', () => setSelected(index));
-                row.addEventListener('click', () => {
-                    setSelected(index);
-                    selectCurrent();
-                });
+                const row = createItemRow(item, index);
+                updateItemRow(row, item, index);
                 menuItems.appendChild(row);
             });
 
-            const selected = menuItems.children[selectedIndex];
-            if (selected) selected.scrollIntoView({ block: 'nearest' });
-            if (notify) notifySelection();
+            refreshSelection(notify);
         }
 
         function setSelected(index) {
             if (!items.length || index === selectedIndex) return;
             selectedIndex = (index + items.length) % items.length;
-            renderItems();
+            refreshSelection();
         }
 
         function moveSelection(direction) {
             if (!items.length) return;
             selectedIndex = (selectedIndex + direction + items.length) % items.length;
-            renderItems();
+            refreshSelection();
+        }
+
+        function applyLiveItems(data, forceReorder = false) {
+            if (mode !== 'decoration') return;
+
+            const nextItems = Array.isArray(data.items) ? data.items : [];
+
+            if (listReorderPaused && !forceReorder) {
+                const rows = new Map(
+                    Array.from(menuItems.querySelectorAll('.menu-item'))
+                        .map(row => [row.dataset.key, row])
+                );
+
+                nextItems.forEach((item, index) => {
+                    const row = rows.get(String(item.key ?? index));
+                    if (row) updateItemRow(row, item, index);
+                });
+
+                pendingLiveItems = data;
+                return;
+            }
+
+            const selectedKey = items[selectedIndex]
+                ? String(items[selectedIndex].key)
+                : null;
+            const existingRows = new Map(
+                Array.from(menuItems.querySelectorAll('.menu-item'))
+                    .map(row => [row.dataset.key, row])
+            );
+            const activeKeys = new Set();
+
+            items = nextItems;
+            menuItems.querySelectorAll('.empty').forEach(row => row.remove());
+
+            items.forEach((item, index) => {
+                const key = String(item.key ?? index);
+                let row = existingRows.get(key);
+
+                if (!row) row = createItemRow(item, index);
+                updateItemRow(row, item, index);
+                menuItems.appendChild(row);
+                activeKeys.add(key);
+            });
+
+            existingRows.forEach((row, key) => {
+                if (!activeKeys.has(key)) row.remove();
+            });
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'empty';
+                empty.textContent = window.emptyText || 'No furniture available.';
+                menuItems.appendChild(empty);
+                selectedIndex = 0;
+                return;
+            }
+
+            const matchingIndex = selectedKey === null
+                ? -1
+                : items.findIndex(item => String(item.key) === selectedKey);
+            selectedIndex = matchingIndex >= 0
+                ? matchingIndex
+                : Math.max(0, Math.min(selectedIndex, items.length - 1));
+
+            refreshSelection(false);
+            notifySelection();
         }
 
         function selectCurrent() {
@@ -399,24 +501,31 @@
         window.addEventListener('mousedown', event => {
             if (panel.style.display !== 'block') return;
 
-            if (event.button === 2) {
-                event.preventDefault();
-                post('cameraDragStart', { button: 'right' });
+            if (event.button === 0 && mode === 'decoration') {
+                listReorderPaused = true;
+                window.clearTimeout(listReorderTimer);
                 return;
             }
 
-            if (event.button === 0) {
-                cameraHoldTimer = window.setTimeout(() => {
-                    cameraHoldTimer = null;
-                    post('cameraDragStart', { button: 'left' });
-                }, 150);
+            if (event.button === 2) {
+                event.preventDefault();
+                post('cameraDragStart');
             }
         }, true);
 
         window.addEventListener('mouseup', event => {
-            if (event.button !== 0 || cameraHoldTimer === null) return;
-            window.clearTimeout(cameraHoldTimer);
-            cameraHoldTimer = null;
+            if (event.button !== 0 || !listReorderPaused) return;
+
+            window.clearTimeout(listReorderTimer);
+            listReorderTimer = window.setTimeout(() => {
+                listReorderPaused = false;
+
+                if (pendingLiveItems) {
+                    const pending = pendingLiveItems;
+                    pendingLiveItems = null;
+                    applyLiveItems(pending, true);
+                }
+            }, 75);
         }, true);
 
         window.addEventListener('contextmenu', event => event.preventDefault());
@@ -451,6 +560,9 @@
             const data = event.data || {};
 
             if (data.action === 'close' || data.show === false) {
+                listReorderPaused = false;
+                pendingLiveItems = null;
+                window.clearTimeout(listReorderTimer);
                 panel.style.display = 'none';
                 decorationView.style.display = 'none';
                 placementView.style.display = 'none';
@@ -459,6 +571,9 @@
             }
 
             if (data.action === 'decoration') {
+                listReorderPaused = false;
+                pendingLiveItems = null;
+                window.clearTimeout(listReorderTimer);
                 mode = 'decoration';
                 items = Array.isArray(data.items) ? data.items : [];
                 selectedIndex = 0;
@@ -472,7 +587,15 @@
                 return;
             }
 
+            if (data.action === 'decorationItems' && mode === 'decoration') {
+                applyLiveItems(data);
+                return;
+            }
+
             if (data.action === 'placement' || data.show === true) {
+                listReorderPaused = false;
+                pendingLiveItems = null;
+                window.clearTimeout(listReorderTimer);
                 mode = 'placement';
                 items = [];
                 const lang = data.lang || {};

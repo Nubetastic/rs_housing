@@ -299,6 +299,58 @@ AddEventHandler('rs_furniture:server:place', function(propname, furnitem, furnin
     end)
 end)
 
+RegisterNetEvent('rs_furniture:server:updatePosition')
+AddEventHandler('rs_furniture:server:updatePosition', function(propname, furniid, px, py, pz, ph)
+    local src = source
+
+    if type(propname) ~= 'string' or type(furniid) ~= 'string' then return end
+    if type(px) ~= 'number' or type(py) ~= 'number'
+        or type(pz) ~= 'number' or type(ph) ~= 'number' then return end
+
+    if not IsWithinPropertyRange(propname, px, py, pz) then
+        notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_TOO_FAR'])
+        return
+    end
+
+    IsAuthorized(src, propname, function(auth)
+        if not auth then
+            notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_NO_ACCESS'])
+            return
+        end
+
+        GetFurniture(propname, function(furniture)
+            local foundEntry = nil
+
+            for _, entry in ipairs(furniture) do
+                if tostring(entry.id) == furniid then
+                    foundEntry = entry
+                    break
+                end
+            end
+
+            if not foundEntry then
+                notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_NOT_FOUND'])
+                return
+            end
+
+            foundEntry.x = px
+            foundEntry.y = py
+            foundEntry.z = pz
+            foundEntry.h = ph
+
+            SaveFurniture(propname, furniture, function(ok)
+                if not ok then
+                    notiFurniError(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_SAVE_ERROR'])
+                    return
+                end
+
+                TriggerClientEvent('rs_furniture:client:receive', src, propname, furniture)
+                notiFurniSuccess(src, Locales['HOUSING_NOTI'], Locales['FURNITURE_UPDATED'])
+            end)
+        end)
+    end)
+end)
+
 RegisterNetEvent('rs_furniture:server:sell')
 AddEventHandler('rs_furniture:server:sell', function(propname, furniid)
     local src    = source

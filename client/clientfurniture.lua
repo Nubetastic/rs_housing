@@ -24,6 +24,7 @@ local xx, yy, zz, hh
 local furniturex       = {}
 local furniitems       = {}
 local spawnedfurniture = {}
+local SpawnFurniture
 local hidePlacementText = false
 local created           = false
 local decorationOpen    = false
@@ -31,6 +32,7 @@ local decorationView    = nil
 local decorationEntries = {}
 local decorationCategory = nil
 local selectedSellFurniture = nil
+local modifyingFurniture = nil
 local browsePreview     = false
 local cameraDragActive  = false
 local cameraDragControl = nil
@@ -48,13 +50,6 @@ local function drawtext(str, dx, dy, w, h2, shadow, r, g, b, a, centre)
     if shadow then SetTextDropshadow(1, 0, 0, 0, 255) end
     Citizen.InvokeNative(0xADA9255D, 10)
     DisplayText(s, dx, dy)
-end
-
-local function GetGameplayCameraForwardVector()
-    local rotation = GetGameplayCamRot(2)
-    local heading = math.rad(rotation.z)
-
-    return vector3(-math.sin(heading), math.cos(heading), 0.0)
 end
 
 local function DistanceToProperty(propconfig)
@@ -199,6 +194,7 @@ local function SetDecorationView(view, title, subtitle, entries)
     local items = {}
     for index, entry in ipairs(decorationEntries) do
         items[index] = {
+            key = entry.data and entry.data.id and tostring(entry.data.id) or tostring(index),
             label = entry.label or '',
             description = entry.description or ''
         }
@@ -261,7 +257,7 @@ local function SpawnDecorationPreview(entry)
 
     local ped = PlayerPedId()
     local pos = GetEntityCoords(ped)
-    local forward = GetGameplayCameraForwardVector()
+    local forward = GetEntityForwardVector(ped)
 
     objectxyz = CreateObject(
         model,
@@ -290,6 +286,7 @@ function OpenDecorationMain()
         ('Property %s'):format(globalpropname or '?'), {
             { kind = 'buy', label = 'Buy Furniture', description = 'Browse furniture categories.' },
             { kind = 'sell', label = 'Sell Furniture', description = 'Select placed furniture to sell.' },
+            { kind = 'modify', label = 'Modify Furniture', description = 'Adjust placed furniture.' },
             { kind = 'exit', label = 'Exit', description = 'Close the decoration menu.' }
         })
 end
@@ -357,23 +354,183 @@ function OpenDecorationSell()
         'The selected object is marked with a red ring', entries)
 end
 
+local function BuildDecorationModifyEntries()
+    local playerCoords = GetEntityCoords(PlayerPedId())
+    local sorted = {}
+
+    for _, furniture in ipairs(furniturex) do
+        local distance = GetDistanceBetweenCoords(
+            playerCoords.x, playerCoords.y, playerCoords.z,
+            furniture.x, furniture.y, furniture.z,
+            true
+        )
+
+        sorted[#sorted + 1] = {
+            furniture = furniture,
+            distance = distance
+        }
+    end
+
+    table.sort(sorted, function(a, b)
+        if a.distance == b.distance then
+            return (a.furniture.name or '') < (b.furniture.name or '')
+        end
+        return a.distance < b.distance
+    end)
+
+    local entries = {}
+    for _, entry in ipairs(sorted) do
+        entries[#entries + 1] = {
+            kind = 'modify_item',
+            label = entry.furniture.name or '?',
+            description = ('Distance: %.1fm'):format(entry.distance),
+            data = entry.furniture
+        }
+    end
+
+    return entries
+end
+
+function OpenDecorationModify()
+    DeleteDecorationPreview()
+
+    SetDecorationView('modify_items', 'Modify Furniture',
+        'Nearest first; the selected object is marked with a red ring',
+        BuildDecorationModifyEntries())
+end
+
+CreateThread(function()
+    while true do
+        if decorationOpen and decorationView == 'modify_items' then
+            decorationEntries = BuildDecorationModifyEntries()
+
+            local items = {}
+            for index, entry in ipairs(decorationEntries) do
+                items[index] = {
+                    key = entry.data and entry.data.id and tostring(entry.data.id) or tostring(index),
+                    label = entry.label or '',
+                    description = entry.description or ''
+                }
+            end
+
+            SendNUIMessage({
+                action = 'decorationItems',
+                items = items
+            })
+
+            Wait(100)
+        else
+            Wait(500)
+        end
+    end
+end)
+
+local function RemoveSpawnedFurnitureEntity(furniture)
+    local entities = spawnedfurniture[globalpropname]
+    if not entities then return end
+
+    local savedCoords = vector3(furniture.x, furniture.y, furniture.z)
+    local savedModel = NormalizeModelHash(furniture.furnitem)
+    local closestIndex = nil
+    local closestDistance = nil
+
+    for index, entity in ipairs(entities) do
+        if DoesEntityExist(entity)
+            and NormalizeModelHash(GetEntityModel(entity)) == savedModel then
+            local entityCoords = GetEntityCoords(entity)
+            local distance = GetDistanceBetweenCoords(
+                savedCoords.x, savedCoords.y, savedCoords.z,
+                entityCoords.x, entityCoords.y, entityCoords.z,
+                true
+            )
+
+            if not closestDistance or distance < closestDistance then
+                closestIndex = index
+                closestDistance = distance
+            end
+        end
+    end
+
+    if closestIndex then
+        local entity = entities[closestIndex]
+        if DoesEntityExist(entity) then DeleteObject(entity) end
+        table.remove(entities, closestIndex)
+    end
+end
+
+local function StartFurnitureModification(entry)
+    local furniture = entry and entry.data
+    local model = furniture and furniture.furnitem
+    if not furniture or not model then return end
+
+    if not HasModelLoaded(model) then RequestModel(model) end
+
+    local waited = 0
+    while not HasModelLoaded(model) and waited < 3000 do
+        Wait(50)
+        waited = waited + 50
+    end
+
+    if not HasModelLoaded(model) then
+        lib.notify({
+            title = Locales['HOUSING_NOTI'],
+            description = Locales['FURNITURE_NOT_FOUND'],
+            type = 'error',
+            duration = 3000,
+            position = 'top'
+        })
+        return
+    end
+
+    objectxyz = CreateObjectNoOffset(
+        model, furniture.x, furniture.y, furniture.z,
+        false, true, false
+    )
+    if not objectxyz or objectxyz == 0 then return end
+
+    RemoveSpawnedFurnitureEntity(furniture)
+
+    SetEntityAsMissionEntity(objectxyz, true)
+    SetEntityCollision(objectxyz, false, false)
+    FreezeEntityPosition(objectxyz, true)
+    SetEntityAlpha(objectxyz, 153)
+    SetEntityHeading(objectxyz, furniture.h or 0.0)
+
+    modifyingFurniture = furniture
+    furnitem = model
+    furnitemcost = furniture.price or 0
+    furniname = furniture.name or '?'
+    browsePreview = false
+    decorationOpen = false
+    decorationView = 'placement'
+    selectedSellFurniture = nil
+    placefurniture = true
+    placedobject = true
+    created = true
+    hidePlacementText = true
+    x, y, z = furniture.x, furniture.y, furniture.z
+    h = furniture.h or 0.0
+
+    OpenFurnitureMenu()
+end
+
 RegisterNUICallback('decorationNavigate', function(data, cb)
     local entry = decorationEntries[tonumber(data.index)]
 
     selectedSellFurniture = nil
     if decorationView == 'buy_items' then
         SpawnDecorationPreview(entry)
-    elseif decorationView == 'sell_items' and entry then
+    elseif (decorationView == 'sell_items' or decorationView == 'modify_items') and entry then
         selectedSellFurniture = entry.data
     end
 
     cb('ok')
 end)
 
-RegisterNUICallback("cameraDragStart", function(data, cb)
+RegisterNUICallback("cameraDragStart", function(_, cb)
     if (menuOpen or decorationOpen) and not cameraDragActive then
         cameraDragActive = true
-        cameraDragControl = data.button == 'right' and 0xF84FA74F or 0x07CE1E61
+        cameraDragControl = 0xF84FA74F
         cameraDragGrace = GetGameTimer() + 250
         SetNuiFocus(false, false)
         SetNuiFocusKeepInput(true)
@@ -390,6 +547,8 @@ RegisterNUICallback('decorationSelect', function(data, cb)
         OpenDecorationCategories()
     elseif entry.kind == 'sell' then
         OpenDecorationSell()
+    elseif entry.kind == 'modify' then
+        OpenDecorationModify()
     elseif entry.kind == 'exit' then
         ExitDecorationMenu()
     elseif entry.kind == 'category' then
@@ -397,6 +556,8 @@ RegisterNUICallback('decorationSelect', function(data, cb)
     elseif entry.kind == 'sell_item' then
         TriggerServerEvent('rs_furniture:server:sell', globalpropname, tostring(entry.data.id))
         OpenDecorationMain()
+    elseif entry.kind == 'modify_item' then
+        StartFurnitureModification(entry)
     elseif entry.kind == 'buy_item' then
         if not objectxyz or not DoesEntityExist(objectxyz) then
             SpawnDecorationPreview(entry)
@@ -432,6 +593,8 @@ RegisterNUICallback('decorationBack', function(_, cb)
     elseif decorationView == 'buy_items' then
         OpenDecorationCategories()
     elseif decorationView == 'sell_items' then
+        OpenDecorationMain()
+    elseif decorationView == 'modify_items' then
         OpenDecorationMain()
     else
         ExitDecorationMenu()
@@ -484,6 +647,8 @@ Citizen.CreateThread(function()
 end)
 
 local function CancelFurniturePlacement()
+    local wasModifying = modifyingFurniture ~= nil
+
     placefurniture = false
     placedobject = false
     created = false
@@ -494,8 +659,16 @@ local function CancelFurniturePlacement()
         DeleteObject(objectxyz)
     end
     objectxyz = nil
+    modifyingFurniture = nil
 
     CloseFurnitureMenu()
+
+    if wasModifying and not Config.furnitureitems and IsInRange() then
+        SpawnFurniture(globalpropname, furniturex)
+        inmenu = true
+        OpenDecorationModify()
+        return
+    end
 
     if not Config.furnitureitems and decorationCategory and IsInRange() then
         inmenu = true
@@ -514,7 +687,7 @@ Citizen.CreateThread(function()
             and browsePreview and objectxyz and DoesEntityExist(objectxyz) then
             local ped = PlayerPedId()
             local pos = GetEntityCoords(ped)
-            local forward = GetGameplayCameraForwardVector()
+            local forward = GetEntityForwardVector(ped)
 
             SetEntityCoordsNoOffset(
                 objectxyz,
@@ -538,8 +711,7 @@ Citizen.CreateThread(function()
         if menuOpen or decorationOpen then
             drawtext(Locales['CAMERA'],
                 0.50, 0.05, 0.3, 0.3, true, 0, 255, 0, 255, true)
-            local cameraButtonPressed = IsControlPressed(0, 0x07CE1E61)
-                or IsControlPressed(0, 0xF84FA74F)
+            local cameraButtonPressed = IsControlPressed(0, 0xF84FA74F)
 
             if not cameraButtonPressed and not cameraDragActive then
                 DisableControlAction(0, 0xA987235F, true)
@@ -661,6 +833,7 @@ Citizen.CreateThread(function()
 
                     if actionQueue == "confirm" then
                         xx, yy, zz, hh = x, y, z, h
+                        local furnitureBeingModified = modifyingFurniture
 
                         placefurniture = false
                         placedobject   = false
@@ -669,19 +842,28 @@ Citizen.CreateThread(function()
 
                         DeleteObject(objectxyz)
                         objectxyz = nil
+                        modifyingFurniture = nil
 
                         CloseFurnitureMenu()
 
                         if not Config.furnitureitems then
-                            TriggerServerEvent('rs_furniture:server:buy',
-                                globalpropname, furnitem, furniname, furnitemcost,
-                                xx, yy, zz, hh)
+                            if furnitureBeingModified then
+                                TriggerServerEvent('rs_furniture:server:updatePosition',
+                                    globalpropname, tostring(furnitureBeingModified.id),
+                                    xx, yy, zz, hh)
+                                SpawnFurniture(globalpropname, furniturex)
+                            else
+                                TriggerServerEvent('rs_furniture:server:buy',
+                                    globalpropname, furnitem, furniname, furnitemcost,
+                                    xx, yy, zz, hh)
+                            end
 
-                            inmenu = false
+                            inmenu = true
                             local PlayerData = GetPlayerData()
-                            PlayerData.IsInMenu = false
+                            PlayerData.IsInMenu = true
                             FreezeEntityPosition(PlayerPedId(), false)
                             ClearPedTasks(PlayerPedId())
+                            OpenDecorationMain()
                         else
                             Citizen.Wait(500)
                             confirmmenu_furniture(
@@ -715,7 +897,7 @@ Citizen.CreateThread(function()
     end
 end)
 
-local function SpawnFurniture(propname, furniture)
+SpawnFurniture = function(propname, furniture)
     if spawnedfurniture[propname] then
         for _, ent in ipairs(spawnedfurniture[propname]) do
             if DoesEntityExist(ent) then DeleteObject(ent) end
@@ -784,6 +966,8 @@ AddEventHandler('rs_furniture:client:receive', function(propname, furniture)
 
         if decorationOpen and decorationView == 'sell_items' then
             OpenDecorationSell()
+        elseif decorationOpen and decorationView == 'modify_items' then
+            OpenDecorationModify()
         end
     end
     SpawnFurniture(propname, furniture)
