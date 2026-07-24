@@ -22,14 +22,14 @@ client_scripts {
     'client/admin_disabled_properties.lua',
     'client/clientfurniture.lua',
     'client/clientshop.lua',
-    'client/doorInfo.lua',
     'client/doorlocks.lua',
     'client/functions.lua',
     'client/main.lua',
     'client/menu.lua',
 
     -- One-time property value updater. Comment this line out after running UpdatePropertyValues.
-    'client/update_property_values.lua'
+    --'client/update_property_values.lua'
+    --'client/doorInfo.lua',
 }
 server_scripts { 
     'server/versionchecker.lua',
@@ -42,7 +42,7 @@ server_scripts {
     'server/server_main.lua',
 
     -- One-time property value updater. Comment this line out after running UpdatePropertyValues.
-    'server/update_property_values.lua'
+    --'server/update_property_values.lua'
 }
 
 lua54 'yes'
