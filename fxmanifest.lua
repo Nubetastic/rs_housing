@@ -28,7 +28,7 @@ client_scripts {
     'client/menu.lua',
 
     -- One-time property value updater. Comment this line out after running UpdatePropertyValues.
-    --'client/update_property_values.lua'
+    --'client/update_property_values.lua',
     --'client/doorInfo.lua',
 }
 server_scripts { 
